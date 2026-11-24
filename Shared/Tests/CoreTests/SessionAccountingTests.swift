@@ -38,14 +38,14 @@ import Foundation
         #expect(t == SessionTotals(focusedSec: 2700, offtaskSec: 120, idleSec: 180))
     }
 
-    @Test func sleepBeatsBreak() {
+    @Test func breakBeatsSleep() {
         let t = sessionTotals(start: start, end: at(60), events: [
             SessionEvent(.breakStart, at: at(10)),
             SessionEvent(.sleep, at: at(12)),
             SessionEvent(.wake, at: at(20)),
             SessionEvent(.breakEnd, at: at(22)),
         ])
-        #expect(t == SessionTotals(focusedSec: 2880, breakSec: 240, sleepSec: 480))
+        #expect(t == SessionTotals(focusedSec: 2880, breakSec: 720))
     }
 
     @Test func openStateRunsToEnd() {
@@ -65,5 +65,40 @@ import Foundation
     @Test func incompleteWhenActiveShort() {
         let t = sessionTotals(start: start, end: at(32), events: [])
         #expect(!isComplete(t, plannedMin: 50))
+    }
+
+    @Test func fractionalSecondsStillSumExactly() {
+        let t = sessionTotals(start: start, end: start.addingTimeInterval(3000), events: [
+            SessionEvent(.offtaskStart, at: start.addingTimeInterval(100.3)),
+            SessionEvent(.offtaskEnd, at: start.addingTimeInterval(200.6)),
+        ])
+        #expect(t.activeSec == 3000)
+        #expect(isComplete(t, plannedMin: 50))
+    }
+
+    @Test func exactlyPlannedLengthIsComplete() {
+        let t = sessionTotals(start: start, end: at(50), events: [])
+        #expect(t.activeSec == 3000)
+        #expect(isComplete(t, plannedMin: 50))
+    }
+
+    @Test func endBeforeStartIsEmpty() {
+        #expect(sessionTotals(start: at(10), end: at(5), events: []) == SessionTotals())
+    }
+
+    @Test func sameTimestampStartSortsBeforeEnd() {
+        let t = sessionTotals(start: start, end: at(50), events: [
+            SessionEvent(.offtaskEnd, at: at(15)), SessionEvent(.offtaskStart, at: at(15)),
+        ])
+        #expect(t == SessionTotals(focusedSec: 3000))
+    }
+
+    @Test func rawValuesMatchDatabase() {
+        let expected: [SessionEventType: String] = [
+            .offtaskStart: "offtask_start", .offtaskEnd: "offtask_end", .breakStart: "break_start",
+            .breakEnd: "break_end", .idleStart: "idle_start", .idleEnd: "idle_end", .sleep: "sleep", .wake: "wake",
+        ]
+        #expect(expected.count == 8)
+        for (k, v) in expected { #expect(k.rawValue == v) }
     }
 }

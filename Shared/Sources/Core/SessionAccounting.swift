@@ -36,20 +36,41 @@ public struct SessionTotals: Equatable, Sendable {
     }
 }
 
-/// Splits `[start, end]` into buckets. Overlap priority: sleep > break > idle > off-task > focused.
+private func whole(_ d: Date) -> Date { Date(timeIntervalSinceReferenceDate: floor(d.timeIntervalSinceReferenceDate)) }
+
+/// Start-type events sort before end-type events at the same instant.
+private func isStart(_ t: SessionEventType) -> Bool {
+    switch t {
+    case .offtaskStart, .breakStart, .idleStart, .sleep: true
+    case .offtaskEnd, .breakEnd, .idleEnd, .wake: false
+    }
+}
+
+/// Splits `[start, end]` into buckets. Overlap priority: break > sleep > idle > off-task > focused
+/// (sleep during a break counts as break).
+///
+/// Whole-second rule: `start`, `end` and every event time are floored to the whole second first, so all buckets
+/// are whole seconds and sum exactly to the session length. The SQL view must use the same rule
+/// (`date_trunc('second', …)`). Returns all zeros when `end <= start` after flooring.
 public func sessionTotals(start: Date, end: Date, events: [SessionEvent]) -> SessionTotals {
-    var focused = 0.0, offtask = 0.0, onBreak = 0.0, idle = 0.0, asleep = 0.0
+    let start = whole(start), end = whole(end)
+    guard end > start else { return SessionTotals() }
+    var totals = SessionTotals()
     var isOff = false, isBreak = false, isIdle = false, isAsleep = false
     var cursor = start
 
     func advance(to time: Date) {
-        let d = time.timeIntervalSince(cursor)
-        if isAsleep { asleep += d } else if isBreak { onBreak += d } else if isIdle { idle += d }
-        else if isOff { offtask += d } else { focused += d }
+        let d = Int(time.timeIntervalSince(cursor))
+        if isBreak { totals.breakSec += d } else if isAsleep { totals.sleepSec += d } else if isIdle { totals.idleSec += d }
+        else if isOff { totals.offtaskSec += d } else { totals.focusedSec += d }
         cursor = time
     }
 
-    for e in events.filter({ $0.at >= start && $0.at <= end }).sorted(by: { $0.at < $1.at }) {
+    let sorted = events
+        .map { SessionEvent($0.type, at: whole($0.at)) }
+        .filter { $0.at >= start && $0.at <= end }
+        .sorted { $0.at != $1.at ? $0.at < $1.at : (isStart($0.type) && !isStart($1.type)) }
+    for e in sorted {
         advance(to: e.at)
         switch e.type {
         case .offtaskStart: isOff = true
@@ -63,9 +84,7 @@ public func sessionTotals(start: Date, end: Date, events: [SessionEvent]) -> Ses
         }
     }
     advance(to: end)
-
-    return SessionTotals(focusedSec: Int(focused), offtaskSec: Int(offtask), breakSec: Int(onBreak),
-                         idleSec: Int(idle), sleepSec: Int(asleep))
+    return totals
 }
 
 public func isComplete(_ totals: SessionTotals, plannedMin: Int) -> Bool {
