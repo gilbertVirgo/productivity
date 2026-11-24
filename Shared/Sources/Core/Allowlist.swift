@@ -25,6 +25,8 @@ public enum Browsers {
 public struct Allowlist: Sendable {
     public var entries: Set<AllowEntry>
     private let alwaysAllowed: Set<String>
+    /// Extra always-on-task bundle IDs that the host app can change at runtime (stored lowercased).
+    public var extraAllowed: Set<String>
 
     static let systemAlwaysAllowed: Set<String> = ["com.apple.loginwindow", "com.apple.screensaver.engine"]
 
@@ -32,7 +34,7 @@ public struct Allowlist: Sendable {
         self.entries = Set(entries)
         self.alwaysAllowed = Self.systemAlwaysAllowed
             .union([ownBundleID.lowercased()])
-            .union(extraAllowed.map { $0.lowercased() })
+        self.extraAllowed = Set(extraAllowed.map { $0.lowercased() })
     }
 
     /// - Parameters:
@@ -40,7 +42,7 @@ public struct Allowlist: Sendable {
     ///   - host: the active tab's host when `bundleID` is a supported browser and it could be read; otherwise nil.
     public func isOnTask(bundleID: String, host: String?) -> Bool {
         let id = bundleID.lowercased()
-        if alwaysAllowed.contains(id) || entries.contains(AllowEntry(.app, id)) { return true }
+        if alwaysAllowed.contains(id) || extraAllowed.contains(id) || entries.contains(AllowEntry(.app, id)) { return true }
         guard Browsers.supported.contains(id) else { return false }
         let domains = entries.filter { $0.kind == .domain }.map(\.value)
         guard let host = host?.lowercased() else { return !domains.isEmpty } // spec 6.4: benefit of the doubt

@@ -26,8 +26,9 @@ public struct OffTaskTracker: Sendable {
     }
 
     public mutating func observe(bundleID: String, host: String?, at now: Date) -> [Output] {
+        let fired = tick(at: now)
         current = Foreground(bundleID: bundleID, host: host)
-        return evaluate(at: now)
+        return fired + evaluate(at: now)
     }
 
     public mutating func tick(at now: Date) -> [Output] {
@@ -38,15 +39,24 @@ public struct OffTaskTracker: Sendable {
     }
 
     public mutating func allow(_ entry: AllowEntry, at now: Date) -> [Output] {
+        let fired = tick(at: now)
         allowlist.entries.insert(entry)
-        return evaluate(at: now)
+        return fired + evaluate(at: now)
     }
 
+    /// Pass the combined state: onBreak || idle || asleep. Toggling per source would un-suspend during a break.
     public mutating func setSuspended(_ value: Bool, at now: Date) -> [Output] {
+        let fired = (value && !suspended) ? tick(at: now) : []
         suspended = value
         guard value else { return evaluate(at: now) }
         pending = nil
-        return endIfOffTask(at: now)
+        return fired + endIfOffTask(at: now)
+    }
+
+    public mutating func setExtraAllowed(_ ids: Set<String>, at now: Date) -> [Output] {
+        let fired = tick(at: now)
+        allowlist.extraAllowed = Set(ids.map { $0.lowercased() })
+        return fired + evaluate(at: now)
     }
 
     private mutating func evaluate(at now: Date) -> [Output] {

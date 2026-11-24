@@ -86,4 +86,25 @@ import Foundation
         #expect(t.tick(at: at(24)).isEmpty)
         #expect(t.tick(at: at(25)) == [.started(at: at(25), bundleID: spotify, host: nil)])
     }
+
+    @Test func lateTickStillBooksStartWhenReturningOnList() {
+        var t = tracker()
+        _ = t.observe(bundleID: spotify, host: nil, at: at(0))
+        #expect(t.observe(bundleID: figma, host: nil, at: at(40))
+                == [.started(at: at(15), bundleID: spotify, host: nil), .ended(at: at(40))])
+    }
+
+    @Test func lateTickStillBooksStartWhenSuspending() {
+        var t = tracker()
+        _ = t.observe(bundleID: spotify, host: nil, at: at(0))
+        #expect(t.setSuspended(true, at: at(30))
+                == [.started(at: at(15), bundleID: spotify, host: nil), .ended(at: at(30))])
+    }
+
+    @Test func setExtraAllowedEndsOffTask() {
+        var t = tracker()
+        _ = t.observe(bundleID: "com.apple.systempreferences", host: nil, at: at(0))
+        _ = t.tick(at: at(15))
+        #expect(t.setExtraAllowed(["com.apple.systempreferences"], at: at(30)) == [.ended(at: at(30))])
+    }
 }
