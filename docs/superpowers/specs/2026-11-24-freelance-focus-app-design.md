@@ -120,6 +120,7 @@ Periods close via a pg_cron job that runs hourly and closes any day/week that ha
 - One session at a time, always running on the Mac. It can be started on the Mac directly, or from the phone/widget, which sends a start command the Mac picks up via Realtime (6.11). If the Mac doesn't acknowledge within 10 s, the phone shows "Mac not reachable" and deletes the command.
 - The session reaches planned length → it ends as `completed` with a notification and a "start a break?" prompt.
 - Focused time accrues only while: not on break, not idle, not asleep, not off-task (after grace, see 6.4).
+- Overlapping states: break > sleep > idle > off-task. Sleep during a break counts as break.
 - Planned length counts **elapsed session time excluding breaks and sleep**. Off-task and idle time still use up the planned length. Drifting does not extend the session.
 
 ### 6.4 Off-task detection (Mac)
@@ -247,6 +248,7 @@ No Accessibility or Screen Recording permission needed.
   - Period boundaries: timezone, Monday week start, DST change week.
   - Goal evaluation and "on track" fraction.
 - **SQL**: one test script for the period-close function on fixture data (pgTAP or a plain `psql` script with asserts).
+- **Mirror Core**: plan 2's SQL tests port the `SessionAccountingTests` cases as fixtures (same priority order break > sleep > idle > off-task > focused, open state runs to end, timestamps floored to whole seconds via `date_trunc('second', …)`), and plan 8's `share-data` tests port `GoalsTests`, so Swift, SQL and TypeScript agree.
 - **Edge functions**: a Deno test per function; `parse-tasks` with a stubbed Claude response, covering schema validation and the fallback.
 - **Manual checklist** per release:
   - Browser permission flow

@@ -56,7 +56,7 @@ Shared/
     PointsTests.swift
 ```
 
-Not in Core, on purpose: "System Settings is on-task while our permission prompt is showing" (spec 6.4). Only the Mac layer knows when it prompted, so plan 3 passes System Settings' bundle ID as an extra always-allowed ID at that moment via `Allowlist(entries:ownBundleID:extraAllowed:)`.
+System Settings is on-task while our permission prompt is showing (spec 6.4). Only the Mac layer knows when it prompted, so plan 3 calls `OffTaskTracker.setExtraAllowed(["com.apple.systempreferences"], at:)` when the prompt opens and `setExtraAllowed([], at:)` when it closes.
 
 ---
 
