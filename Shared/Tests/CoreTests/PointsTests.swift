@@ -35,4 +35,13 @@ import Testing
         #expect(!canRedeem(cost: 2000, balance: 1240))
         #expect(!canRedeem(cost: 150, balance: -20))
     }
+
+    @Test func rawValuesMatchDatabase() {
+        let expected: [PointKind: String] = [
+            .focus: "focus", .sessionComplete: "session_complete", .dailyGoal: "daily_goal",
+            .weeklyGoal: "weekly_goal", .offtask: "offtask", .breakOver: "break_over", .redeem: "redeem",
+        ]
+        #expect(expected.count == 7)
+        for (k, v) in expected { #expect(k.rawValue == v) }
+    }
 }
