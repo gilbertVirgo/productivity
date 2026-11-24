@@ -77,4 +77,13 @@ import Foundation
         _ = t.setSuspended(false, at: at(10))
         #expect(t.tick(at: at(60)).isEmpty)
     }
+
+    @Test func offListObservedWhileSuspendedStartsGraceOnResume() {
+        var t = tracker()
+        _ = t.setSuspended(true, at: at(0))
+        _ = t.observe(bundleID: spotify, host: nil, at: at(5))
+        #expect(t.setSuspended(false, at: at(10)).isEmpty)
+        #expect(t.tick(at: at(24)).isEmpty)
+        #expect(t.tick(at: at(25)) == [.started(at: at(25), bundleID: spotify, host: nil)])
+    }
 }
