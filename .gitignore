@@ -4,3 +4,4 @@
 DerivedData/
 xcuserdata/
 Stint.xcodeproj/
+supabase/functions/.env
