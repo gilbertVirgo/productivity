@@ -29,7 +29,7 @@ targets:
     sources:
       - Mac
       - path: SharedUI
-        excludes: [WeekBars.swift]
+        excludes: [WeekBars.swift, SnapshotStore.swift, StartLink.swift]
     dependencies:
       - package: Core
       - package: Core
@@ -80,6 +80,7 @@ targets:
     platform: iOS
     sources: [iOS, SharedUI]
     dependencies:
+      - target: StintWidgets
       - package: Core
       - package: Core
         product: StintData
@@ -95,6 +96,13 @@ targets:
         StintSupabaseAnonKey: $(STINT_SUPABASE_ANON_KEY)
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.stint.ios
+            CFBundleURLSchemes: [stint]
+    entitlements:
+      path: iOS/Stint.entitlements
+      properties:
+        com.apple.security.application-groups: [group.dev.stint]
     settings:
       base:
         PRODUCT_NAME: Stint
@@ -118,3 +126,31 @@ targets:
         CODE_SIGN_STYLE: Manual
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Stint.app/Stint"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  StintWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Widgets
+      - SharedUI/Theme.swift
+      - SharedUI/WeekBars.swift
+      - SharedUI/SnapshotStore.swift
+      - SharedUI/StartLink.swift
+    dependencies:
+      - package: Core
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: Stint
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Widgets/StintWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.dev.stint]
+    settings:
+      base:
+        PRODUCT_NAME: StintWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: dev.stint.ios.widgets
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual

@@ -4,6 +4,7 @@ import Supabase
 import StintData
 import Core
 import os
+import WidgetKit
 
 /// The phone's sync: auth, push/pull through the shared SyncEngine, the session feed, and commands to the Mac.
 @MainActor @Observable
@@ -19,6 +20,8 @@ final class PhoneSync {
     /// "Waiting for your Mac…" while a command is pending; afterwards the rejection or "Mac not reachable".
     var commandStatus: String?
     var waiting = false
+    /// A `stint://start` that arrived before sign-in finished resuming; sent once signed in.
+    var pendingStart: UUID?
     let configured: Bool
     let cal = PeriodCalendar(timeZone: .current)
 
@@ -30,6 +33,7 @@ final class PhoneSync {
     @ObservationIgnored private var debounce: Task<Void, Never>?
     @ObservationIgnored private var syncing = false
     @ObservationIgnored private var again = false
+    @ObservationIgnored private var loggedGroupMissing = false
     @ObservationIgnored private var generation = 0 // bumped on sign-out so in-flight passes discard their results
 
     init(context: ModelContext, defaults: UserDefaults = .standard, info: [String: Any]? = Bundle.main.infoDictionary) {
@@ -46,6 +50,7 @@ final class PhoneSync {
         guard let client, let s = try? await client.auth.session else { return }
         signedIn(s.user)
         await setActive(true)
+        await flushPendingStart()
     }
 
     private func signedIn(_ user: User) { state = .signedIn(email: user.email ?? ""); userID = user.id }
@@ -66,6 +71,7 @@ final class PhoneSync {
             let r = try await client.auth.verifyOTP(email: email, token: code, type: .email)
             signedIn(r.user)
             await setActive(true)
+            await flushPendingStart()
         } catch { lastError = error.localizedDescription }
     }
 
@@ -77,7 +83,8 @@ final class PhoneSync {
         try? await client?.auth.signOut()
         while syncing { try? await Task.sleep(for: .milliseconds(50)) }
         do { try Self.wipe(ctx, defaults: defaults) } catch { Self.log.error("wipe: \(error.localizedDescription, privacy: .public)") }
-        running = nil; snapshot = nil; lastSync = nil; lastError = nil; commandStatus = nil
+        running = nil; snapshot = nil; lastSync = nil; lastError = nil; commandStatus = nil; pendingStart = nil
+        publish()
         state = .signedOut
     }
 
@@ -129,6 +136,7 @@ final class PhoneSync {
                 guard gen == generation else { return }
                 apply(week: rows, running: run, now: .now)
                 lastSync = .now; lastError = nil
+                publish()
             } catch {
                 guard gen == generation else { return }
                 lastError = error.localizedDescription
@@ -155,7 +163,30 @@ final class PhoneSync {
             sessions: sessions, pointsToday: ledger + live, now: now, calendar: cal)
     }
 
+    /// Hands the snapshot to the widgets (spec §6.9: refresh on foreground and on realtime updates).
+    private func publish() {
+        guard let url = SnapshotStore.defaultURL else {
+            if !loggedGroupMissing { Self.log.notice("App Group unavailable; widgets keep their placeholder"); loggedGroupMissing = true }
+            return
+        }
+        do {
+            if let s = snapshot { try SnapshotStore.write(s, to: url) } else { try? FileManager.default.removeItem(at: url) }
+        } catch { Self.log.error("snapshot: \(error.localizedDescription, privacy: .public)") }
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     // MARK: commands (spec §6.3)
+
+    /// The Start widget's link. Signed out (or still resuming) it waits for sign-in rather than being dropped.
+    func openStart(_ id: UUID) {
+        if userID == nil { pendingStart = id } else { Task { await send(.start(projectID: id, plannedMin: StartLink.plannedMin, firstTaskID: nil)) } }
+    }
+
+    private func flushPendingStart() async {
+        guard let id = pendingStart else { return }
+        pendingStart = nil
+        await send(.start(projectID: id, plannedMin: StartLink.plannedMin, firstTaskID: nil))
+    }
 
     func send(_ cmd: SessionCommand) async {
         guard let engine, let userID, !waiting else { return }

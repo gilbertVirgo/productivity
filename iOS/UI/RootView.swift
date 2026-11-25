@@ -6,6 +6,12 @@ struct RootView: View {
     @Environment(PhoneSync.self) private var sync
     @State var tab: Tab = .today
     var body: some View {
+        content.onOpenURL { url in
+            tab = .today
+            if let id = StartLink.parse(url) { sync.openStart(id) }
+        }
+    }
+    @ViewBuilder private var content: some View {
         if case .signedIn = sync.state {
             TabView(selection: $tab) {
                 TodayView().tabItem { Label("Today", systemImage: "sun.max") }.tag(Tab.today)
