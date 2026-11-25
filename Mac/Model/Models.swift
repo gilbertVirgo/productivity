@@ -84,6 +84,7 @@ import Core
     var sleepSec: Int
     var eventsData: Data
     var allowData: Data
+    var allowReasons: [String] = []
 
     init(projectID: UUID, firstTaskID: UUID?, plannedMin: Int, startedAt: Date, allowData: Data) {
         id = UUID(); createdAt = startedAt; updatedAt = startedAt
