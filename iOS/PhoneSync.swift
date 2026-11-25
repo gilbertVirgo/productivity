@@ -9,7 +9,7 @@ import os
 @MainActor @Observable
 final class PhoneSync {
     enum State: Equatable { case signedOut, signingIn, signedIn(email: String) }
-    static let log = Logger(subsystem: "dev.stint", category: "ios-sync")
+    static let log = Logger(subsystem: "dev.stint.ios", category: "sync")
 
     var state: State = .signedOut
     var lastSync: Date?
@@ -167,7 +167,11 @@ final class PhoneSync {
             // (it counts as pending, no network) and discard the outcome below.
             let outcome = await awaitCommandOutcome(sleep: { try? await Task.sleep(for: .seconds(1)) },
                                                     poll: { try Task.checkCancellation(); return try await engine.command(id) })
-            guard !Task.isCancelled else { commandStatus = nil; return }
+            guard !Task.isCancelled else {
+                // §6.3: an abandoned command must not run later. Unstructured so the delete isn't cancelled too.
+                Task { try? await engine.deleteCommand(id) }
+                commandStatus = nil; return
+            }
             switch outcome {
             case .accepted: commandStatus = nil; syncSoon()
             case .rejected(let reason): commandStatus = reason
