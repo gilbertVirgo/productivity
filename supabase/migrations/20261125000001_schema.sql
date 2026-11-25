@@ -1,7 +1,7 @@
 -- Stint schema (spec §5). updated_at is client-set for last-write-wins sync (§6.11): no trigger touches it.
 
 create or replace function public.is_valid_timezone(tz text) returns boolean
-language sql immutable as $$ select exists (select 1 from pg_timezone_names where name = tz) $$;
+language sql stable as $$ select exists (select 1 from pg_timezone_names where name = tz) $$;
 
 create table public.profile (
   id uuid primary key default gen_random_uuid(),
@@ -56,6 +56,7 @@ create table public.task (
   done_at timestamptz,
   source text not null default 'manual' check (source in ('manual', 'voice')),
   sort int not null default 0,
+  unique (id, user_id),
   foreign key (project_id, user_id) references public.project (id, user_id) on delete cascade
 );
 
@@ -65,7 +66,7 @@ create table public.session (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   project_id uuid not null,
-  first_task_id uuid references public.task (id) on delete set null,
+  first_task_id uuid,
   planned_min int not null check (planned_min > 0),
   started_at timestamptz not null,
   ended_at timestamptz,
@@ -75,7 +76,8 @@ create table public.session (
   unique (id, user_id),
   check (ended_at is null or ended_at >= started_at),
   check ((ended_at is null) = (end_kind is null)),
-  foreign key (project_id, user_id) references public.project (id, user_id) on delete cascade
+  foreign key (project_id, user_id) references public.project (id, user_id) on delete cascade,
+  foreign key (first_task_id, user_id) references public.task (id, user_id) on delete set null (first_task_id)
 );
 
 create table public.session_allow (
@@ -149,7 +151,7 @@ create table public.share_link (
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  token text not null unique
+  token text not null unique check (token ~ '^[A-Za-z0-9_-]{43}$')
     default rtrim(translate(encode(extensions.gen_random_bytes(32), 'base64'), '+/', '-_'), '='),
   friend_label text not null default '',
   revoked_at timestamptz
@@ -176,6 +178,8 @@ create table public.session_command (
 
 create index on public.project (user_id);
 create index on public.task (project_id);
+create index on public.project_allow (project_id);
+create index on public.session_allow (session_id);
 create index on public.session (user_id, started_at);
 create index on public.session (project_id, started_at);
 create index on public.session_event (session_id);
@@ -214,3 +218,5 @@ end $$;
 
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
+
+revoke execute on function public.handle_new_user() from public, anon, authenticated;

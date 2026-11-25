@@ -1,5 +1,5 @@
 begin;
-select plan(13);
+select plan(17);
 
 -- two users; the auth.users trigger creates their profiles
 insert into auth.users (id, email) values
@@ -26,6 +26,18 @@ select throws_ok(
 select throws_ok(
   $$ insert into public.project (name, daily_goal_days) values ('Bad days', '{0,8}') $$,
   '23514', null, 'daily_goal_days must be ISO weekdays');
+
+insert into public.task (id, project_id, title) values ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'A task');
+insert into public.session (id, project_id, planned_min, started_at) values ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 25, now());
+insert into public.session_event (session_id, at, type) values ('30000000-0000-0000-0000-000000000001', now(), 'sleep');
+update public.session_event set detail = '{"x":1}';
+delete from public.session_event;
+select is((select count(*)::int from public.session_event where detail = '{}'), 1, 'session_event is append-only for clients');
+
+select throws_ok(
+  $$ update public.project set user_id = '00000000-0000-0000-0000-00000000000b' $$,
+  '42501', null, 'client cannot reassign project to another user');
+select is((select count(*)::int from public.project where user_id = '00000000-0000-0000-0000-00000000000a'), 1, 'project still owned by A');
 
 insert into public.point_event (delta, kind, note) values (50, 'focus', 'Northwind');
 update public.point_event set delta = 999;
@@ -55,6 +67,12 @@ select throws_ok(
 select throws_ok(
   $$ update public.profile set timezone = 'Mars/Olympus' $$,
   '23514', null, 'timezone must be a real IANA name');
+
+insert into public.project (id, name) values ('10000000-0000-0000-0000-000000000002', 'B proj');
+select throws_ok(
+  $$ insert into public.session (project_id, first_task_id, planned_min, started_at)
+     values ('10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', 25, now()) $$,
+  '23503', null, 'cannot reference another user''s task as first_task_id');
 
 -- anon
 reset role;
