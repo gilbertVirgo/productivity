@@ -87,9 +87,7 @@ final class SpeechCapture {
     func cancel() {
         if starting { abandoned = true }
         guard mode == .recording || mode == .finishing else { return }
-        stopAudio()
-        take += 1 // drop any late callbacks
-        finish()
+        finish() // stops audio and drops late callbacks
     }
 
     private func stopAudio() {
@@ -98,7 +96,10 @@ final class SpeechCapture {
         audio = nil
     }
 
+    /// Also reached when the recognizer ends on its own mid-recording, so it stops the mic too.
     private func finish() {
+        stopAudio()
+        take += 1 // the cancel below fires one more callback; drop it
         task?.cancel()
         task = nil; request = nil
         mode = .idle
