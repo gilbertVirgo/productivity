@@ -1,3 +1,4 @@
+import StintData
 import AppKit
 import SwiftData
 import Core

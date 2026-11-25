@@ -1,3 +1,4 @@
+import StintData
 import SwiftUI
 import SwiftData
 import AppKit
@@ -141,6 +142,7 @@ private struct ProjectEditor: View {
     }
 
     private func remove(_ r: AllowRule) {
+        ctx.insert(Tombstone(table: "project_allow", rowID: r.id, at: .now))
         ctx.delete(r); project.updatedAt = .now; ctx.saveLogged()
     }
 

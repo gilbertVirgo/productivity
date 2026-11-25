@@ -2,13 +2,13 @@ import Testing
 import Foundation
 import SwiftData
 import Core
-@testable import Stint
+@testable import StintData
 
 @MainActor
 @Suite struct LedgerTests {
     func makeCtx() throws -> ModelContext {
         let c = try ModelContainer(
-            for: Project.self, AllowRule.self, TaskItem.self, SessionRecord.self, PointEvent.self, Treat.self,
+            for: Schema(StintSchema.models),
             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         return ModelContext(c)
     }

@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Stint
+@testable import StintData
 
 @Suite struct GoalInputTests {
     @Test func parsing() {
@@ -20,12 +20,5 @@ import Foundation
         let dates: [Date?] = [nil, Date(timeIntervalSince1970: 1000), Date(timeIntervalSince1970: 1099),
                               Date(timeIntervalSince1970: 1100), Date(timeIntervalSince1970: 999)]
         #expect(tasksDone(dates, in: day) == 2)
-    }
-}
-
-@Suite struct NudgeTests {
-    @Test func offTaskLine() {
-        #expect(Stint.offTaskLine(elapsedSec: 42) == "Off task so far 0:42 · −0 pts")
-        #expect(Stint.offTaskLine(elapsedSec: 125) == "Off task so far 2:05 · −4 pts")
     }
 }

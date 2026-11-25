@@ -3,15 +3,15 @@ import SwiftData
 import Core
 import os
 
-enum LedgerError: Error { case insufficientPoints }
+public enum LedgerError: Error { case insufficientPoints }
 
 @MainActor
-enum Ledger {
+public enum Ledger {
     private static let log = Logger(subsystem: "dev.stint.mac", category: "ledger")
     private static func enc<T: Encodable>(_ v: T) throws -> Data { try JSONEncoder().encode(v) }
     private static func dec<T: Decodable>(_ d: Data) -> [T] { (try? JSONDecoder().decode([T].self, from: d)) ?? [] }
 
-    static func openSession(_ ctx: ModelContext, project: Project, plannedMin: Int, firstTask: TaskItem?,
+    public static func openSession(_ ctx: ModelContext, project: Project, plannedMin: Int, firstTask: TaskItem?,
                             startedAt: Date, allow: [AllowEntry]) throws -> SessionRecord {
         let r = SessionRecord(projectID: project.id, firstTaskID: firstTask?.id, plannedMin: plannedMin,
                               startedAt: startedAt, allowData: try enc(allow))
@@ -20,7 +20,7 @@ enum Ledger {
         return r
     }
 
-    static func checkpoint(_ ctx: ModelContext, record: SessionRecord, events: [SessionEvent], allowAdded: [AllowEntry], at: Date) throws {
+    public static func checkpoint(_ ctx: ModelContext, record: SessionRecord, events: [SessionEvent], allowAdded: [AllowEntry], at: Date) throws {
         let e = try enc(events), a = try enc(allowAdded)
         record.eventsData = e
         record.allowAddedData = a
@@ -28,7 +28,7 @@ enum Ledger {
         try ctx.save()
     }
 
-    static func close(_ ctx: ModelContext, record: SessionRecord, result: SessionResult, endedAt: Date, earlyReason: String?) throws {
+    public static func close(_ ctx: ModelContext, record: SessionRecord, result: SessionResult, endedAt: Date, earlyReason: String?) throws {
         guard record.endedAt == nil else { return }
         let events = try enc(result.events)
         let added = try enc(result.allowAdded)
@@ -52,7 +52,7 @@ enum Ledger {
         (try? ctx.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == id })))?.first?.name ?? ""
     }
 
-    static func recoverOrphans(_ ctx: ModelContext, now: Date) throws {
+    public static func recoverOrphans(_ ctx: ModelContext, now: Date) throws {
         let open = (try? ctx.fetch(FetchDescriptor<SessionRecord>(predicate: #Predicate { $0.endedAt == nil }))) ?? []
         for r in open {
             let end = r.updatedAt
@@ -66,23 +66,23 @@ enum Ledger {
         }
     }
 
-    static func balance(_ ctx: ModelContext) -> Int {
+    public static func balance(_ ctx: ModelContext) -> Int {
         ((try? ctx.fetch(FetchDescriptor<PointEvent>())) ?? []).reduce(0) { $0 + $1.delta }
     }
 
-    static func redeem(_ ctx: ModelContext, treat: Treat, at: Date) throws {
+    public static func redeem(_ ctx: ModelContext, treat: Treat, at: Date) throws {
         guard canRedeem(cost: treat.cost, balance: balance(ctx)) else { throw LedgerError.insufficientPoints }
         ctx.insert(PointEvent(at: at, delta: -treat.cost, kind: PointKind.redeem.rawValue, refID: treat.id, note: treat.name))
         try ctx.save()
     }
 
-    static func summaries(_ ctx: ModelContext, since: Date) -> [SessionSummary] {
+    public static func summaries(_ ctx: ModelContext, since: Date) -> [SessionSummary] {
         let rows = (try? ctx.fetch(FetchDescriptor<SessionRecord>(
             predicate: #Predicate { $0.endedAt != nil && $0.startedAt >= since }))) ?? []
         return rows.map(\.summary)
     }
 
-    static func breakUsedSec(_ ctx: ModelContext, in interval: DateInterval) -> Int {
+    public static func breakUsedSec(_ ctx: ModelContext, in interval: DateInterval) -> Int {
         Core.breakSec(summaries(ctx, since: interval.start), in: interval)
     }
 }

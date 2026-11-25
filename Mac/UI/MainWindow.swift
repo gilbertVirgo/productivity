@@ -1,3 +1,4 @@
+import StintData
 import SwiftUI
 import SwiftData
 

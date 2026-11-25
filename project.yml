@@ -18,6 +18,8 @@ targets:
     sources: [Mac]
     dependencies:
       - package: Core
+      - package: Core
+        product: StintData
     info:
       path: Mac/Info.plist
       properties:

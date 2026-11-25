@@ -1,3 +1,4 @@
+import StintData
 import SwiftUI
 import SwiftData
 import Core
@@ -9,8 +10,7 @@ struct StintApp: App {
 
     init() {
         do {
-            container = try ModelContainer(for: Project.self, AllowRule.self, TaskItem.self,
-                                           SessionRecord.self, PointEvent.self, Treat.self)
+            container = try ModelContainer(for: Schema(StintSchema.models))
         } catch { fatalError("ModelContainer: \(error)") }
         _app = State(initialValue: AppState(context: container.mainContext))
     }
