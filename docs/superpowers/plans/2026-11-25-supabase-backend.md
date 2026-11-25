@@ -566,7 +566,7 @@ cross join lateral public.compute_session_totals(
 - Consumes: `profile.timezone`, the `project` goal columns, `session` (with `ended_at`), `session_totals.focused_sec`, `task.done_at`, `goal_result`, `point_event`.
 - Produces:
   - `public.close_periods(p_now timestamptz default now()) returns int`. It returns the number of `goal_result` rows written by that call.
-  - `public.record_goal(p_project public.project, p_period text, p_start date, p_kind text, p_target numeric, p_actual numeric, p_met boolean) returns int`. It returns 1 if it wrote a row and 0 if the row already existed.
+  - `public.record_goal(p_project public.project, p_period text, p_start date, p_kind text, p_target numeric, p_actual numeric, p_met boolean, p_now timestamptz) returns int`. It returns 1 if it wrote a row and 0 if the row already existed.
   - Both are `security definer` with execute revoked from `public`, `anon` and `authenticated`.
   - A pg_cron job named `close-periods` runs at minute 5 of every hour.
 
