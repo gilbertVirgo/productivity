@@ -24,7 +24,16 @@
 	<string>public.app-category.productivity</string>
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Stint reads the website in your current Safari or Chrome tab to tell whether you're on task. It never reads page content.</string>
+	<key>StintSupabaseAnonKey</key>
+	<string>$(STINT_SUPABASE_ANON_KEY)</string>
+	<key>StintSupabaseURL</key>
+	<string>$(STINT_SUPABASE_URL)</string>
 </dict>
 </plist>

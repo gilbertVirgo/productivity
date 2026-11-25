@@ -282,6 +282,11 @@
       //   "sender_name": "Admin"
       // },
 
+      // Sign-in is by 6-digit code, so the magic-link email must carry the token.
+      "template": {
+        "magic_link": { "subject": "Your Stint sign-in code", "content_path": "./supabase/templates/magic_link.html" },
+        "confirmation": { "subject": "Your Stint sign-in code", "content_path": "./supabase/templates/magic_link.html" }
+      },
       // Uncomment to customize email template
       // "template": {
       //   "invite": {

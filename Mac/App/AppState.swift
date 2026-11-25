@@ -35,6 +35,9 @@ final class AppState {
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var monitor: ActivityMonitor?
     @ObservationIgnored private var ticks = 0
+    /// Sync hooks: fired after every checkpoint and after a session closes.
+    @ObservationIgnored var onCheckpoint: (() -> Void)?
+    @ObservationIgnored var onSessionClosed: (() -> Void)?
 
     init(context: ModelContext) {
         ctx = context
@@ -91,6 +94,16 @@ final class AppState {
         m.start()
         m.reportCurrent()
         Notifier.requestAuthorization()
+    }
+
+    /// Start by id (phone command). False if a session is running or the project isn't local.
+    @discardableResult
+    func start(projectID: UUID, plannedMin: Int, firstTaskID: UUID?) -> Bool {
+        guard engine == nil,
+              let p = try? ctx.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == projectID })).first else { return false }
+        let t = firstTaskID.flatMap { id in try? ctx.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first }
+        start(project: p, plannedMin: plannedMin, firstTask: t)
+        return isRunning
     }
 
     func takeBreak() { run { $0.setBreak(true, at: .now) }; checkBreakAllowance() }
@@ -150,6 +163,7 @@ final class AppState {
         guard let e = engine, let r = record else { return }
         do { try Ledger.checkpoint(ctx, record: r, events: e.events, allowAdded: e.allowAdded, at: Date()) }
         catch { Self.log.error("checkpoint: \(error)") }
+        onCheckpoint?()
     }
 
     private func checkBreakAllowance() {
@@ -176,5 +190,6 @@ final class AppState {
         if result.completed {
             Notifier.post(title: "Session complete", body: "+\(total) points")
         }
+        onSessionClosed?()
     }
 }

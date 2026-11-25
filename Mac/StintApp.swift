@@ -7,12 +7,15 @@ import Core
 struct StintApp: App {
     let container: ModelContainer
     @State private var app: AppState
+    @State private var sync: SyncCoordinator
 
     init() {
         do {
             container = try ModelContainer(for: Schema(StintSchema.models))
         } catch { fatalError("ModelContainer: \(error)") }
-        _app = State(initialValue: AppState(context: container.mainContext))
+        let state = AppState(context: container.mainContext)
+        _app = State(initialValue: state)
+        _sync = State(initialValue: SyncCoordinator(app: state, context: container.mainContext))
     }
 
     var body: some Scene {
@@ -25,7 +28,7 @@ struct StintApp: App {
         .modelContainer(container)
 
         Window("Stint", id: "main") {
-            MainWindow().environment(app)
+            MainWindow().environment(app).environment(sync)
         }
         .modelContainer(container)
     }

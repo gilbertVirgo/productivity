@@ -3,10 +3,10 @@ import SwiftUI
 import SwiftData
 
 enum MainSection: String, CaseIterable, Identifiable {
-    case today = "Today", projects = "Projects", rewards = "Rewards"
+    case today = "Today", projects = "Projects", rewards = "Rewards", account = "Account"
     var id: String { rawValue }
     var icon: String {
-        switch self { case .today: "sun.max"; case .projects: "folder"; case .rewards: "gift" }
+        switch self { case .today: "sun.max"; case .projects: "folder"; case .rewards: "gift"; case .account: "person.crop.circle" }
     }
 }
 
@@ -31,6 +31,7 @@ struct MainWindow: View {
             case .today: TodayView()
             case .projects: ProjectsView()
             case .rewards: RewardsView()
+            case .account: AccountView()
             }
         }
         .frame(minWidth: 900, minHeight: 600)

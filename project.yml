@@ -6,10 +6,15 @@ options:
 packages:
   Core:
     path: Shared
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: 2.55.0
 settings:
   base:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1"
+    STINT_SUPABASE_URL: "http:/$()/127.0.0.1:54321"
+    STINT_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
   StintMac:
@@ -20,12 +25,18 @@ targets:
       - package: Core
       - package: Core
         product: StintData
+      - package: Supabase
+        product: Supabase
     info:
       path: Mac/Info.plist
       properties:
         CFBundleName: Stint
         CFBundleDisplayName: Stint
         LSMultipleInstancesProhibited: true
+        StintSupabaseURL: $(STINT_SUPABASE_URL)
+        StintSupabaseAnonKey: $(STINT_SUPABASE_ANON_KEY)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         LSApplicationCategoryType: public.app-category.productivity
         NSAppleEventsUsageDescription: "Stint reads the website in your current Safari or Chrome tab to tell whether you're on task. It never reads page content."
     entitlements:
