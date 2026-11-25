@@ -78,16 +78,9 @@ final class SyncCoordinator {
         userID = nil; lastSync = nil; lastError = nil; state = .signedOut
     }
 
-    enum OwnerCheck { case claim, ok, mismatch }
-    /// Local ids belong to the first account that synced here; another account's RLS would reject every push.
-    static func ownerCheck(stored: String?, current: UUID) -> OwnerCheck {
-        guard let stored else { return .claim }
-        return stored == current.uuidString ? .ok : .mismatch
-    }
-
     private func signedIn(_ user: User) async {
         state = .signedIn(email: user.email ?? "")
-        switch Self.ownerCheck(stored: defaults.string(forKey: "syncOwnerUserID"), current: user.id) {
+        switch ownerCheck(stored: defaults.string(forKey: "syncOwnerUserID"), current: user.id) {
         case .claim: defaults.set(user.id.uuidString, forKey: "syncOwnerUserID")
         case .ok: break
         case .mismatch:
@@ -156,14 +149,18 @@ final class SyncCoordinator {
                 for row in try await engine.pendingCommands() {
                     guard gen == generation else { return }
                     let age = Date.now.timeIntervalSince(row.createdAt)
-                    if row.rejectedReason != nil { // waiting for the phone to read it
-                        if age > 10 { try await engine.deleteCommand(row.id) }
-                        continue
-                    }
-                    guard age <= 10 else {
-                        Self.log.info("discarded stale command \(row.kind, privacy: .public), age \(Int(age))s")
+                    switch Self.disposition(age: age, rejected: row.rejectedReason != nil) {
+                    case .leave: continue // rejected, waiting for the phone to read it
+                    case .cleanup:
+                        Self.log.notice("cleaned up rejected command \(row.kind, privacy: .public), age \(Int(age))s")
                         try await engine.deleteCommand(row.id)
                         continue
+                    case .rejectTooLate:
+                        // Never delete: a missing row means "accepted" to the phone.
+                        Self.log.notice("rejected stale command \(row.kind, privacy: .public), age \(Int(age))s")
+                        try await engine.rejectCommand(row.id, reason: "Your Mac got this too late.")
+                        continue
+                    case .act: break
                     }
                     let cmd = SessionCommand.parse(row)
                     var done = cmd.map { Self.perform($0, on: app) } ?? false
@@ -184,6 +181,14 @@ final class SyncCoordinator {
                 }
             } catch { Self.log.error("commands: \(error.localizedDescription, privacy: .public)") }
         } while rerunCommands && gen == generation
+    }
+
+    enum Disposition { case act, rejectTooLate, cleanup, leave }
+    /// A missing row means "accepted" to the phone, so only an acted-on command is ever deleted straight away.
+    /// The phone polls for 15 s and the Mac never accepts after 10 s; rejected rows linger 60 s for the phone to read.
+    static func disposition(age: TimeInterval, rejected: Bool) -> Disposition {
+        if rejected { return age > 60 ? .cleanup : .leave }
+        return age <= 10 ? .act : .rejectTooLate
     }
 
     /// Signed-out data is local-only: the next account to sign in receives everything.

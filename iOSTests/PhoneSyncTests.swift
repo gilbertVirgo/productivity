@@ -50,4 +50,15 @@ import StintData
         #expect(s.snapshot?.pointsToday == 5 + 10) // ledger + 10 provisional focused minutes
         #expect(s.running == run)
     }
+
+    @Test func unsyncedCountsDirtyTasksAndPointsOnly() throws {
+        let c = try ctx()
+        let p = Project(name: "Northwind"); c.insert(p) // dirty, but not the phone's to edit
+        let dirty = TaskItem(title: "A"); c.insert(dirty); dirty.project = p
+        let clean = TaskItem(title: "B"); c.insert(clean); clean.project = p; clean.syncedAt = clean.updatedAt
+        let pe = PointEvent(at: .now, delta: 5, kind: "focus", refID: nil, note: ""); c.insert(pe)
+        let pc = PointEvent(at: .now, delta: 5, kind: "focus", refID: nil, note: ""); c.insert(pc); pc.syncedAt = pc.updatedAt
+        try c.save()
+        #expect(PhoneSync.unsyncedCount(c) == 2)
+    }
 }

@@ -34,6 +34,7 @@ final class PhoneSync {
     @ObservationIgnored private var syncing = false
     @ObservationIgnored private var again = false
     @ObservationIgnored private var loggedGroupMissing = false
+    @ObservationIgnored private var activeTask: Task<Void, Never>? // serializes setActive so a late stop can't land after a start
     @ObservationIgnored private var generation = 0 // bumped on sign-out so in-flight passes discard their results
 
     init(context: ModelContext, defaults: UserDefaults = .standard, info: [String: Any]? = Bundle.main.infoDictionary) {
@@ -48,13 +49,40 @@ final class PhoneSync {
 
     private func resume() async {
         // No saved session: a start tapped before launch must not fire after some later manual sign-in.
-        guard let client, let s = try? await client.auth.session else { pendingStart = nil; return }
-        signedIn(s.user)
+        // `session` throws offline with an expired token; the stored session still says who is signed in, and the next refresh retries.
+        guard let client, let user = (try? await client.auth.session)?.user ?? client.auth.currentSession?.user
+        else { pendingStart = nil; return }
+        signedIn(user)
         await setActive(true)
         await flushPendingStart()
     }
 
-    private func signedIn(_ user: User) { state = .signedIn(email: user.email ?? ""); userID = user.id }
+    private func signedIn(_ user: User) {
+        switch ownerCheck(stored: defaults.string(forKey: Self.ownerKey), current: user.id) {
+        case .ok: break
+        case .claim: defaults.set(user.id.uuidString, forKey: Self.ownerKey)
+        case .mismatch: // another account's cache: never mix it into this one
+            do { try Self.wipe(ctx, defaults: defaults) } catch { Self.log.error("wipe: \(error.localizedDescription, privacy: .public)") }
+            snapshot = nil; running = nil; publish()
+            defaults.set(user.id.uuidString, forKey: Self.ownerKey)
+        }
+        state = .signedIn(email: user.email ?? ""); userID = user.id
+    }
+    static let ownerKey = "phoneOwnerUserID"
+
+    /// Dirty rows the phone itself edits (tasks, points); signing out would lose them.
+    func unsyncedCount() -> Int { Self.unsyncedCount(ctx) }
+    static func unsyncedCount(_ ctx: ModelContext) -> Int {
+        let t = ((try? ctx.fetch(FetchDescriptor<TaskItem>())) ?? []).filter(\.isDirty).count
+        let p = ((try? ctx.fetch(FetchDescriptor<PointEvent>())) ?? []).filter(\.isDirty).count
+        return t + p
+    }
+
+    /// Best-effort push before the sign-out confirmation; returns what is still unsynced.
+    func flushForSignOut() async -> Int {
+        if let engine, let userID { try? await engine.push(userID: userID) }
+        return unsyncedCount()
+    }
 
     func sendCode(email: String) async {
         guard let client else { return }
@@ -77,6 +105,7 @@ final class PhoneSync {
     }
 
     func signOut() async {
+        if let engine, let userID { try? await engine.push(userID: userID) } // before the generation bump, so the push isn't discarded
         generation += 1
         debounce?.cancel(); debounce = nil
         userID = nil
@@ -103,6 +132,13 @@ final class PhoneSync {
 
     /// Foreground: realtime on plus a refresh. Background: realtime off (spec §6.9: widgets refresh on foreground).
     func setActive(_ active: Bool) async {
+        let prev = activeTask
+        let t = Task { await prev?.value; await self.applyActive(active) }
+        activeTask = t
+        await t.value
+    }
+
+    private func applyActive(_ active: Bool) async {
         guard let engine, let userID else { return }
         if active {
             await engine.startRealtime(userID: userID) { [weak self] in self?.syncSoon() }
@@ -190,7 +226,8 @@ final class PhoneSync {
     }
 
     func send(_ cmd: SessionCommand) async {
-        guard let engine, let userID, !waiting else { return }
+        guard let engine, let userID else { return }
+        guard !waiting else { commandStatus = "Still waiting on your last request…"; return }
         waiting = true; defer { waiting = false }
         commandStatus = "Waiting for your Mac…"
         do {

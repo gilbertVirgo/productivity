@@ -20,7 +20,11 @@ struct StintPhoneApp: App {
             RootView()
                 .environment(sync)
                 .modelContainer(container)
-                .onChange(of: phase) { _, p in Task { await sync.setActive(p == .active) } }
+                .onChange(of: phase) { _, p in
+                    // .inactive is transient (control centre, app switcher): keep realtime through it.
+                    if p == .active { Task { await sync.setActive(true) } }
+                    else if p == .background { Task { await sync.setActive(false) } }
+                }
         }
     }
 }

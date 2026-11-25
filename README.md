@@ -33,6 +33,8 @@ The simulator reaches the local stack at 127.0.0.1. Sign in with an email code f
 
 Logic: `cd Shared && swift test`. App: the same `xcodebuild` command with `test` instead of `build`.
 
+Logs: filter Console by subsystem prefix `dev.stint`.
+
 ## Permissions
 
 On first use, macOS asks to let Stint control Safari and Chrome. That permission is needed to read the current tab's domain. Ad-hoc signed builds may ask again after each rebuild.

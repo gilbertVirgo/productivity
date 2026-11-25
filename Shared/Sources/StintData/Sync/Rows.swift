@@ -1,5 +1,6 @@
 import Foundation
 import Core
+import Supabase
 
 // Wire rows. CodingKeys match supabase/migrations/20261125000001_schema.sql.
 // Nullable columns are always encoded (explicit null) so clearing a value reaches the server.
@@ -187,6 +188,27 @@ public struct SessionCommandRow: Codable, Sendable, Equatable {
     public var payload: [String: String]
     public var rejectedReason: String? = nil
     enum CodingKeys: String, CodingKey { case id, userID = "user_id", createdAt = "created_at", kind, payload, rejectedReason = "rejected_reason" }
+}
+
+extension SessionCommandRow {
+    /// Lenient: a non-string payload value must not fail the whole `pendingCommands()` array and block the channel.
+    /// Scalars are stringified; null/array/object values are dropped, so `parse` rejects the command instead.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id); userID = try c.decode(UUID.self, forKey: .userID)
+        createdAt = try c.decode(Date.self, forKey: .createdAt); kind = try c.decode(String.self, forKey: .kind)
+        rejectedReason = try c.decodeIfPresent(String.self, forKey: .rejectedReason)
+        let raw = (try? c.decode([String: AnyJSON].self, forKey: .payload)) ?? [:]
+        payload = raw.compactMapValues {
+            switch $0 {
+            case .string(let s): s
+            case .integer(let i): String(i)
+            case .double(let d): String(d)
+            case .bool(let b): String(b)
+            default: nil
+            }
+        }
+    }
 }
 
 /// Insert shape for a phone command. `created_at` is server-defaulted so the Mac ages commands by server time.

@@ -52,11 +52,11 @@ import Foundation
         #expect(await awaitCommandOutcome(sleep: {}, poll: { r }) == .rejected("No session is running on your Mac."))
     }
 
-    @MainActor @Test func outcomeUnreachableAfterTenPolls() async {
+    @MainActor @Test func outcomeUnreachableAfterFifteenPolls() async {
         var polls = 0
         let pending = row("break", [:])
         #expect(await awaitCommandOutcome(sleep: {}, poll: { polls += 1; return pending }) == .unreachable)
-        #expect(polls == 10)
+        #expect(polls == 15)
     }
 
     @MainActor @Test func pollErrorsCountAsPending() async {
@@ -64,5 +64,27 @@ import Foundation
         var polls = 0
         let o = await awaitCommandOutcome(sleep: {}, poll: { polls += 1; if polls == 1 { throw Offline() }; return nil })
         #expect(o == .accepted && polls == 2)
+    }
+
+    @Test func lenientDecodeStringifiesScalars() throws {
+        let p = UUID()
+        let json = """
+        {"id":"\(UUID())","user_id":"\(UUID())","created_at":"2026-11-25T10:00:00Z","kind":"start",
+         "payload":{"project_id":"\(p)","planned_min":25,"x":null,"y":[1],"b":true}}
+        """
+        let dec = JSONDecoder(); dec.dateDecodingStrategy = .iso8601
+        let r = try dec.decode(SessionCommandRow.self, from: Data(json.utf8))
+        #expect(r.payload["planned_min"] == "25")
+        #expect(r.payload["x"] == nil && r.payload["y"] == nil)
+        #expect(SessionCommand.parse(r) == .start(projectID: p, plannedMin: 25, firstTaskID: nil))
+        let arr = try dec.decode([SessionCommandRow].self, from: Data("[\(json)]".utf8))
+        #expect(arr.count == 1)
+    }
+
+    @Test func ownerCheckCases() {
+        let id = UUID()
+        #expect(ownerCheck(stored: nil, current: id) == .claim)
+        #expect(ownerCheck(stored: id.uuidString, current: id) == .ok)
+        #expect(ownerCheck(stored: UUID().uuidString, current: id) == .mismatch)
     }
 }

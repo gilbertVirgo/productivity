@@ -42,9 +42,9 @@ public extension SessionCommand {
 public enum CommandOutcome: Equatable, Sendable { case accepted, rejected(String), unreachable }
 
 /// Spec §6.3: polls the sent row until the Mac deletes it (accepted) or marks it rejected; gives up after
-/// `attempts` polls (10 × 1 s). A poll that throws (network) counts as still pending.
+/// `attempts` polls (15 × 1 s, outlasting the Mac's 10 s acceptance cutoff). A poll that throws (network) counts as still pending.
 @MainActor
-public func awaitCommandOutcome(attempts: Int = 10, sleep: () async -> Void,
+public func awaitCommandOutcome(attempts: Int = 15, sleep: () async -> Void,
                                 poll: () async throws -> SessionCommandRow?) async -> CommandOutcome {
     for _ in 0..<attempts {
         await sleep()
@@ -54,4 +54,11 @@ public func awaitCommandOutcome(attempts: Int = 10, sleep: () async -> Void,
         } catch { continue }
     }
     return .unreachable
+}
+
+public enum OwnerCheck: Sendable { case claim, ok, mismatch }
+/// Local ids belong to the first account that synced on this device; another account's RLS would reject every push.
+public func ownerCheck(stored: String?, current: UUID) -> OwnerCheck {
+    guard let stored else { return .claim }
+    return stored == current.uuidString ? .ok : .mismatch
 }

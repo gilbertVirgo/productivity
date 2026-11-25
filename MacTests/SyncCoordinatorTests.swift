@@ -39,11 +39,19 @@ import StintData
         #expect(!SyncCoordinator.perform(.start(projectID: p.id, plannedMin: 25, firstTaskID: nil), on: app))
     }
 
+    @Test func dispositionProtocol() {
+        #expect(SyncCoordinator.disposition(age: 2, rejected: false) == .act)
+        #expect(SyncCoordinator.disposition(age: 10, rejected: false) == .act)
+        #expect(SyncCoordinator.disposition(age: 11, rejected: false) == .rejectTooLate)
+        #expect(SyncCoordinator.disposition(age: 30, rejected: true) == .leave)
+        #expect(SyncCoordinator.disposition(age: 61, rejected: true) == .cleanup)
+    }
+
     @Test func ownerCheckCases() {
         let id = UUID()
-        #expect(SyncCoordinator.ownerCheck(stored: nil, current: id) == .claim)
-        #expect(SyncCoordinator.ownerCheck(stored: id.uuidString, current: id) == .ok)
-        #expect(SyncCoordinator.ownerCheck(stored: UUID().uuidString, current: id) == .mismatch)
+        #expect(ownerCheck(stored: nil, current: id) == .claim)
+        #expect(ownerCheck(stored: id.uuidString, current: id) == .ok)
+        #expect(ownerCheck(stored: UUID().uuidString, current: id) == .mismatch)
     }
 
     @Test func resetSyncStateMakesEverythingDirty() throws {
