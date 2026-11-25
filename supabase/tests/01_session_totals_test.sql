@@ -1,5 +1,5 @@
 begin;
-select plan(13);
+select plan(14);
 
 create function pg_temp.t(m numeric) returns timestamptz language sql immutable as
   $$ select '2026-11-24 16:00:00+00'::timestamptz + make_interval(secs => m * 60) $$;
@@ -60,6 +60,10 @@ insert into public.session_event (user_id, session_id, at, type) values
 select is((select (focused_sec, offtask_sec)::text from public.session_totals
            where session_id = '20000000-0000-0000-0000-000000000001'), '(2700,300)', 'view uses session events');
 
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}';
+select is((select count(*)::int from public.session_totals), 1, 'owner sees own session_totals row');
+reset role;
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-00000000000b","role":"authenticated"}';
 select is((select count(*)::int from public.session_totals), 0, 'view respects RLS');

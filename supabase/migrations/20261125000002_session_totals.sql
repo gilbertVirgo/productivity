@@ -3,7 +3,7 @@
 -- end-type at the same instant; open states run to p_end; events outside [start, end] ignored.
 create function public.compute_session_totals(p_start timestamptz, p_end timestamptz, p_events jsonb)
 returns table (focused_sec int, offtask_sec int, break_sec int, idle_sec int, sleep_sec int)
-language plpgsql immutable as $$
+language plpgsql stable as $$
 declare
   s timestamptz := date_trunc('second', p_start);
   e timestamptz := date_trunc('second', p_end);
