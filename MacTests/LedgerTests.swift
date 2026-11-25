@@ -1,0 +1,83 @@
+import Testing
+import Foundation
+import SwiftData
+import Core
+@testable import Stint
+
+@MainActor
+@Suite struct LedgerTests {
+    func makeCtx() throws -> ModelContext {
+        let c = try ModelContainer(
+            for: Project.self, AllowRule.self, TaskItem.self, SessionRecord.self, PointEvent.self, Treat.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        return ModelContext(c)
+    }
+
+    func project(_ ctx: ModelContext) -> Project {
+        let p = Project(name: "Northwind")
+        ctx.insert(p)
+        return p
+    }
+
+    @Test func closeWritesTotalsAndPoints() throws {
+        let ctx = try makeCtx()
+        let p = project(ctx)
+        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let rec = Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
+        let result = SessionResult(
+            totals: SessionTotals(focusedSec: 3000), completed: true,
+            points: [PointLine(kind: .focus, delta: 50), PointLine(kind: .sessionComplete, delta: 10)],
+            events: [], allowAdded: [])
+        Ledger.close(ctx, record: rec, result: result, endedAt: t0 + 3000, earlyReason: nil)
+        #expect(rec.endKind == "completed")
+        #expect(rec.focusedSec == 3000)
+        let pts = try ctx.fetch(FetchDescriptor<PointEvent>())
+        #expect(pts.count == 2)
+        #expect(pts.allSatisfy { $0.refID == rec.id })
+        #expect(Ledger.balance(ctx) == 60)
+    }
+
+    @Test func redeemGuardsBalance() throws {
+        let ctx = try makeCtx()
+        ctx.insert(PointEvent(at: .now, delta: 100, kind: "focus", refID: nil, note: ""))
+        let big = Treat(name: "Big", cost: 150), small = Treat(name: "Small", cost: 100)
+        ctx.insert(big); ctx.insert(small)
+        #expect(throws: LedgerError.insufficientPoints) { try Ledger.redeem(ctx, treat: big, at: .now) }
+        #expect(Ledger.balance(ctx) == 100)
+        try Ledger.redeem(ctx, treat: small, at: .now)
+        #expect(Ledger.balance(ctx) == 0)
+    }
+
+    @Test func recoverOrphansClosesOpenSessionsEarly() throws {
+        let ctx = try makeCtx()
+        let p = project(ctx)
+        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let rec = Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
+        Ledger.checkpoint(ctx, record: rec,
+                          events: [SessionEvent(.offtaskStart, at: t0 + 600), SessionEvent(.offtaskEnd, at: t0 + 900)],
+                          allow: [], at: t0 + 1200)
+        Ledger.recoverOrphans(ctx, now: t0 + 99999)
+        #expect(rec.endKind == "early")
+        #expect(rec.earlyReason == "Stint quit during session")
+        #expect(rec.endedAt == rec.updatedAt)
+        #expect(rec.focusedSec == 900)
+        #expect(rec.offtaskSec == 300)
+        let pts = try ctx.fetch(FetchDescriptor<PointEvent>(sortBy: [SortDescriptor(\.delta, order: .reverse)]))
+        #expect(pts.map(\.delta) == [15, -10])
+        #expect(pts.map(\.kind) == ["focus", "offtask"])
+    }
+
+    @Test func summariesOnlyClosedSince() throws {
+        let ctx = try makeCtx()
+        let p = project(ctx)
+        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let a = Ledger.openSession(ctx, project: p, plannedMin: 25, firstTask: nil, startedAt: t0, allow: [])
+        let r = SessionResult(totals: SessionTotals(focusedSec: 600), completed: false, points: [], events: [], allowAdded: [])
+        Ledger.close(ctx, record: a, result: r, endedAt: t0 + 600, earlyReason: "x")
+        _ = Ledger.openSession(ctx, project: p, plannedMin: 25, firstTask: nil, startedAt: t0 + 1000, allow: [])
+        let s = Ledger.summaries(ctx, since: t0 - 1)
+        #expect(s.count == 1)
+        #expect(s[0].focusedSec == 600)
+        #expect(Ledger.summaries(ctx, since: t0 + 1).isEmpty)
+    }
+}

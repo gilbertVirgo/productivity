@@ -12,6 +12,10 @@ public struct SessionResult: Sendable {
     public var points: [PointLine]
     public var events: [SessionEvent]
     public var allowAdded: [AllowEntry]
+
+    public init(totals: SessionTotals, completed: Bool, points: [PointLine], events: [SessionEvent], allowAdded: [AllowEntry]) {
+        self.totals = totals; self.completed = completed; self.points = points; self.events = events; self.allowAdded = allowAdded
+    }
 }
 
 /// Rules for one running session (spec 6.3–6.7). Pure: the caller feeds observations and clock ticks.
