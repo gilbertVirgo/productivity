@@ -16,5 +16,5 @@ enum Theme {
 
 enum ProjectColor {
     // teal, amber, purple, blue, rose
-    static let all = ["#0F7B6C", "#D9730D", "#6940A5", "#0B6E99", "#AD1A72"]
+    static let all = ["#0F7B6C", "#B7671F", "#6E56CF", "#2F6FB5", "#B5476A"]
 }

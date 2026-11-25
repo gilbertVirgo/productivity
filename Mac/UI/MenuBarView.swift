@@ -29,6 +29,7 @@ struct MenuBarView: View {
             Button("Quit") { NSApplication.shared.terminate(nil) }.buttonStyle(.plain)
         }
         .padding(14).frame(width: 300)
+        .onChange(of: app.isRunning) { _, running in if !running { endSheet = false } }
         .sheet(isPresented: $endSheet) {
             EndEarlySheet(onEnd: { app.endEarly(reason: $0); endSheet = false }, onCancel: { endSheet = false })
         }

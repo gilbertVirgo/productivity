@@ -109,17 +109,17 @@ final class AppState {
         NSRunningApplication.runningApplications(withBundleIdentifier: id).first?.activate()
     }
 
-    private func run(_ f: (inout SessionEngine) -> [SessionEngine.Signal]) {
+    private func run(stateChange: Bool = true, _ f: (inout SessionEngine) -> [SessionEngine.Signal]) {
         guard var e = engine else { return }
         let signals = f(&e)
         engine = e
         handle(signals)
-        checkpoint()
+        if stateChange || !signals.isEmpty { checkpoint() }
     }
 
     private func tick() {
         now = Date()
-        run { $0.tick(at: .now) }
+        run(stateChange: false) { $0.tick(at: .now) }
         ticks += 1
         if ticks % 15 == 0 { checkpoint() }
         checkBreakAllowance()

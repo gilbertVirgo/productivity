@@ -13,7 +13,7 @@ struct StintApp: App {
                                            SessionRecord.self, PointEvent.self, Treat.self)
         } catch { fatalError("ModelContainer: \(error)") }
         #if DEBUG
-        Self.seedSample(container.mainContext)
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil { Self.seedSample(container.mainContext) }
         #endif
         _app = State(initialValue: AppState(context: container.mainContext))
     }
