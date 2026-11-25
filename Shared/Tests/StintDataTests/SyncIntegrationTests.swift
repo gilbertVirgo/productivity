@@ -102,4 +102,22 @@ struct SyncIntegrationTests {
 
         try await client.auth.signOut()
     }
+
+    @Test func pullPagesThroughTiedRows() async throws {
+        let env = ProcessInfo.processInfo.environment
+        let client = SupabaseClient(
+            supabaseURL: URL(string: env["STINT_SUPABASE_URL"]!)!, supabaseKey: env["STINT_SUPABASE_ANON_KEY"]!,
+            options: .init(db: .init(encoder: SyncCoding.encoder, decoder: SyncCoding.decoder),
+                           auth: .init(storage: MemoryStorage(), emitLocalSessionAsInitialSession: true)))
+        let auth = try await client.auth.signUp(email: "page-\(UUID())@test.local", password: "pw-\(UUID().uuidString)")
+        let a = try ctx(), b = try ctx()
+        for i in 0..<5 { a.insert(PointEvent(at: .now.addingTimeInterval(Double(-i)), delta: 1, kind: "focus", refID: nil, note: "n\(i)")) }
+        try a.save()
+        try await SyncEngine(client: client, context: a, defaults: defaults()).push(userID: auth.user.id)
+        let saved = SyncEngine.pageSize
+        SyncEngine.pageSize = 2; defer { SyncEngine.pageSize = saved }
+        try await SyncEngine(client: client, context: b, defaults: defaults()).pull()
+        #expect(try b.fetch(FetchDescriptor<PointEvent>()).count == 5)
+        try await client.auth.signOut()
+    }
 }

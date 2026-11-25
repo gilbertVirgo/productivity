@@ -14,11 +14,12 @@ public struct ProjectRow: Codable, Sendable, Equatable {
     public var shared: Bool
     public var archivedAt: Date?
     public var serverUpdatedAt: Date? = nil
+    public var createdAt: Date? = nil // receive-only
     enum CodingKeys: String, CodingKey {
         case id, userID = "user_id", updatedAt = "updated_at", name, shareAlias = "share_alias", color
         case weeklyHoursGoal = "weekly_hours_goal", dailyHoursGoal = "daily_hours_goal", dailyGoalDays = "daily_goal_days"
         case tasksGoal = "tasks_goal", tasksGoalPeriod = "tasks_goal_period", shared, archivedAt = "archived_at"
-        case serverUpdatedAt = "server_updated_at"
+        case serverUpdatedAt = "server_updated_at", createdAt = "created_at"
     }
     public func encode(to e: Encoder) throws {
         var c = e.container(keyedBy: CodingKeys.self)

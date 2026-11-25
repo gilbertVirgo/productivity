@@ -31,10 +31,19 @@ import StintData
     }
 
     @Test func unknownProjectAndNoSession() throws {
-        let (app, _, keep) = try make(); defer { withExtendedLifetime(keep) {} }
+        let (app, p, keep) = try make(); defer { withExtendedLifetime(keep) {} }
         #expect(!SyncCoordinator.perform(.start(projectID: UUID(), plannedMin: 25, firstTaskID: nil), on: app))
         #expect(!SyncCoordinator.perform(.takeBreak, on: app))
         #expect(!SyncCoordinator.perform(.resume, on: app))
+        p.archivedAt = .now
+        #expect(!SyncCoordinator.perform(.start(projectID: p.id, plannedMin: 25, firstTaskID: nil), on: app))
+    }
+
+    @Test func ownerCheckCases() {
+        let id = UUID()
+        #expect(SyncCoordinator.ownerCheck(stored: nil, current: id) == .claim)
+        #expect(SyncCoordinator.ownerCheck(stored: id.uuidString, current: id) == .ok)
+        #expect(SyncCoordinator.ownerCheck(stored: UUID().uuidString, current: id) == .mismatch)
     }
 
     @Test func resetSyncStateMakesEverythingDirty() throws {

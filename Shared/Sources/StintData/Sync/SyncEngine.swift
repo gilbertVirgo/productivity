@@ -86,10 +86,21 @@ public final class SyncEngine {
         Date(timeIntervalSince1970: defaults.double(forKey: "sync.watermark.\(table)"))
     }
 
-    private func query(_ table: String, column: String) -> PostgrestTransformBuilder {
-        let since = watermark(table).addingTimeInterval(-Self.lookback)
-        // ponytail: PostgREST caps a page at 1000 rows; the watermark only advances to the last row seen, so the next pull continues.
-        return client.from(table).select().gt(column, value: Self.iso(since)).order(column, ascending: true)
+    /// Page size for pulls. PostgREST caps a response at 1000 rows; rows can tie on the cursor (a first push gives every row
+    /// the same server timestamp), so we page by offset over a stable (cursor, id) order instead of trusting the watermark.
+    static var pageSize = 1000
+
+    private func fetchAll<R: Decodable>(_ table: String, column: String) async throws -> [R] {
+        let since = Self.iso(watermark(table).addingTimeInterval(-Self.lookback))
+        var all: [R] = []
+        while true {
+            let from = all.count
+            let page: [R] = try await client.from(table).select().gt(column, value: since)
+                .order(column, ascending: true).order("id", ascending: true)
+                .range(from: from, to: from + Self.pageSize - 1).execute().value
+            all += page
+            if page.count < Self.pageSize { return all }
+        }
     }
 
     private static func iso(_ d: Date) -> String {
@@ -107,57 +118,58 @@ public final class SyncEngine {
     }
 
     public func pull() async throws {
+        // Built after each network await, so edits made meanwhile are seen; deleted models are skipped.
         func byID<M: PersistentModel>(_ type: M.Type, _ id: (M) -> UUID) throws -> [UUID: M] {
-            Dictionary(try context.fetch(FetchDescriptor<M>()).map { (id($0), $0) }, uniquingKeysWith: { a, _ in a })
+            Dictionary(try context.fetch(FetchDescriptor<M>()).filter { !$0.isDeleted }.map { (id($0), $0) }, uniquingKeysWith: { a, _ in a })
         }
+        func deadIDs() throws -> Set<UUID> { Set(try context.fetch(FetchDescriptor<Tombstone>()).map(\.rowID)) }
         // Watermarks are written only after the save succeeds, so a failed pull is retried in full.
         var marks: [(String, Date)] = []
         func advance(_ table: String, _ dates: [Date]) {
             if let m = dates.max(), m > watermark(table) { marks.append((table, m)) }
         }
-        let dead = Set(try context.fetch(FetchDescriptor<Tombstone>()).map(\.rowID))
 
-        var projects = try byID(Project.self, \.id)
-        let prs: [ProjectRow] = try await query("project", column: "server_updated_at").execute().value
+        let prs: [ProjectRow] = try await fetchAll("project", column: "server_updated_at")
+        var projects = try byID(Project.self, \.id), dead = try deadIDs()
         for r in prs where !dead.contains(r.id) {
             if let p = projects[r.id] { _ = Mapping.apply(r, to: p) } else { projects[r.id] = Mapping.insert(r, in: context) }
         }
         advance("project", prs.compactMap(\.serverUpdatedAt))
 
-        var rules = try byID(AllowRule.self, \.id)
-        let ars: [ProjectAllowRow] = try await query("project_allow", column: "server_updated_at").execute().value
+        let ars: [ProjectAllowRow] = try await fetchAll("project_allow", column: "server_updated_at")
+        var rules = try byID(AllowRule.self, \.id); dead = try deadIDs()
         for r in ars where !dead.contains(r.id) {
             if let a = rules[r.id] { _ = Mapping.apply(r, to: a) } else if let a = Mapping.insert(r, in: context) { rules[r.id] = a }
         }
         advance("project_allow", ars.compactMap(\.serverUpdatedAt))
 
-        var tasks = try byID(TaskItem.self, \.id)
-        let trs: [TaskRow] = try await query("task", column: "server_updated_at").execute().value
+        let trs: [TaskRow] = try await fetchAll("task", column: "server_updated_at")
+        var tasks = try byID(TaskItem.self, \.id); dead = try deadIDs()
         for r in trs where !dead.contains(r.id) {
             if let t = tasks[r.id] { _ = Mapping.apply(r, to: t) } else if let t = Mapping.insert(r, in: context) { tasks[r.id] = t }
         }
         advance("task", trs.compactMap(\.serverUpdatedAt))
 
-        var treats = try byID(Treat.self, \.id)
-        let tr: [TreatRow] = try await query("treat", column: "server_updated_at").execute().value
+        let tr: [TreatRow] = try await fetchAll("treat", column: "server_updated_at")
+        var treats = try byID(Treat.self, \.id); dead = try deadIDs()
         for r in tr where !dead.contains(r.id) {
             if let t = treats[r.id] { _ = Mapping.apply(r, to: t) } else { treats[r.id] = Mapping.insert(r, in: context) }
         }
         advance("treat", tr.compactMap(\.serverUpdatedAt))
 
         // Sessions are Mac-owned: update existing local rows only, never insert.
+        let srs: [SessionRow] = try await fetchAll("session", column: "server_updated_at")
         let sessions = try byID(SessionRecord.self, \.id)
-        let srs: [SessionRow] = try await query("session", column: "server_updated_at").execute().value
         for r in srs { if let s = sessions[r.id] { _ = Mapping.apply(r, to: s) } }
         advance("session", srs.compactMap(\.serverUpdatedAt))
 
+        let pes: [Stamped<PointEventRow>] = try await fetchAll("point_event", column: "created_at")
         var events = try byID(PointEvent.self, \.id)
-        let pes: [Stamped<PointEventRow>] = try await query("point_event", column: "created_at").execute().value
         for s in pes where events[s.row.id] == nil { events[s.row.id] = Mapping.insert(s.row, in: context) }
         advance("point_event", pes.map(\.createdAt))
 
+        let grs: [GoalResultRow] = try await fetchAll("goal_result", column: "created_at")
         let goals = try byID(GoalResultRecord.self, \.id)
-        let grs: [GoalResultRow] = try await query("goal_result", column: "created_at").execute().value
         for r in grs where goals[r.id] == nil { _ = Mapping.insert(r, in: context) }
         advance("goal_result", grs.map(\.createdAt))
 
@@ -176,12 +188,18 @@ public final class SyncEngine {
 
     // MARK: realtime
 
-    public func startRealtime(onChange: @escaping @MainActor () -> Void) async {
+    public func startRealtime(userID: UUID, onChange: @escaping @MainActor () -> Void) async {
         await stopRealtime()
         let ch = client.channel("stint-sync")
         let tables = Self.editableTables + ["point_event", "goal_result", "session_command"]
-        let streams = tables.map { ch.postgresChange(AnyAction.self, schema: "public", table: $0) }
-        listeners = streams.map { s in Task { @MainActor in for await _ in s { onChange() } } }
+        // Not DELETE: delete events cannot be RLS-filtered, so they would fan out across users. Tombstones are pulled by timer.
+        let f = RealtimePostgresFilter.eq("user_id", value: userID)
+        for t in tables {
+            let i = ch.postgresChange(InsertAction.self, schema: "public", table: t, filter: f)
+            let u = ch.postgresChange(UpdateAction.self, schema: "public", table: t, filter: f)
+            listeners.append(Task { @MainActor in for await _ in i { onChange() } })
+            listeners.append(Task { @MainActor in for await _ in u { onChange() } })
+        }
         channel = ch
         do { try await ch.subscribeWithError() }
         catch { Logger(subsystem: "dev.stint.mac", category: "sync").error("realtime subscribe failed: \(error.localizedDescription, privacy: .public)") }

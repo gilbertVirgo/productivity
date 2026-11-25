@@ -107,7 +107,7 @@ public enum Mapping {
     }
 
     public static func insert(_ r: ProjectRow, in ctx: ModelContext) -> Project {
-        let p = Project(name: r.name, now: r.updatedAt)
+        let p = Project(name: r.name, now: r.createdAt ?? r.updatedAt)
         p.id = r.id
         fill(p, r)
         ctx.insert(p)

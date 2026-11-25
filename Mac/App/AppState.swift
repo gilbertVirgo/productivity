@@ -100,7 +100,8 @@ final class AppState {
     @discardableResult
     func start(projectID: UUID, plannedMin: Int, firstTaskID: UUID?) -> Bool {
         guard engine == nil,
-              let p = try? ctx.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == projectID })).first else { return false }
+              let p = try? ctx.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == projectID })).first,
+              p.archivedAt == nil else { return false }
         let t = firstTaskID.flatMap { id in try? ctx.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first }
         start(project: p, plannedMin: plannedMin, firstTask: t)
         return isRunning

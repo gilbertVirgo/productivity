@@ -41,6 +41,7 @@ public enum Ledger {
         record.eventsData = events
         record.allowAddedData = added
         record.updatedAt = endedAt
+        record.syncedAt = nil // updatedAt may equal the last checkpoint's; force a push of the close
         let note = projectName(ctx, record.projectID)
         for l in result.points {
             ctx.insert(PointEvent(at: endedAt, delta: l.delta, kind: l.kind.rawValue, refID: record.id, note: note))

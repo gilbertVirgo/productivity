@@ -26,6 +26,8 @@ final class SyncCoordinator {
     @ObservationIgnored private var syncAgain = false
     @ObservationIgnored private var handling = false
     @ObservationIgnored private var rerunCommands = false
+    @ObservationIgnored private var generation = 0 // bumped on sign-out so in-flight passes discard their results
+    @ObservationIgnored private let defaults = UserDefaults.standard
 
     init(app: AppState, context: ModelContext) {
         self.app = app; self.ctx = context
@@ -71,17 +73,34 @@ final class SyncCoordinator {
     }
 
     func signOut() async {
+        generation += 1
         timer?.invalidate(); timer = nil
         debounce?.cancel(); debounce = nil
+        userID = nil
         await engine?.stopRealtime()
         try? await client?.auth.signOut()
+        while syncing || handling { await Task.yield() } // in-flight passes bail on the generation change
         if let ctx { try? Self.resetSyncState(ctx) }
         userID = nil; lastSync = nil; lastError = nil; state = .signedOut
     }
 
+    enum OwnerCheck { case claim, ok, mismatch }
+    /// Local ids belong to the first account that synced here; another account's RLS would reject every push.
+    static func ownerCheck(stored: String?, current: UUID) -> OwnerCheck {
+        guard let stored else { return .claim }
+        return stored == current.uuidString ? .ok : .mismatch
+    }
+
     private func signedIn(_ user: User) async {
-        userID = user.id
         state = .signedIn(email: user.email ?? "")
+        switch Self.ownerCheck(stored: defaults.string(forKey: "syncOwnerUserID"), current: user.id) {
+        case .claim: defaults.set(user.id.uuidString, forKey: "syncOwnerUserID")
+        case .ok: break
+        case .mismatch:
+            lastError = "This Mac's data belongs to another Stint account. Sign out and sign in with that account."
+            return
+        }
+        userID = user.id
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -90,7 +109,7 @@ final class SyncCoordinator {
             }
         }
         // Commands first: a slow first sync must not age them past 10 s.
-        await engine?.startRealtime { [weak self] in
+        await engine?.startRealtime(userID: user.id) { [weak self] in
             self?.syncSoon()
             Task { await self?.handlePending() }
         }
@@ -114,17 +133,20 @@ final class SyncCoordinator {
         guard let engine, let userID else { return }
         if syncing { syncAgain = true; return }
         syncing = true; defer { syncing = false }
+        let gen = generation
         repeat {
             syncAgain = false
             do {
                 try await engine.push(userID: userID)
                 try await engine.pull()
+                guard gen == generation else { return }
                 lastSync = .now; lastError = nil
             } catch {
+                guard gen == generation else { return }
                 lastError = error.localizedDescription
                 Self.log.error("sync: \(error.localizedDescription, privacy: .public)")
             }
-        } while syncAgain && self.userID != nil
+        } while syncAgain && gen == generation
     }
 
     // MARK: phone commands
@@ -133,18 +155,28 @@ final class SyncCoordinator {
         guard let engine else { return }
         if handling { rerunCommands = true; return }
         handling = true; defer { handling = false }
+        let gen = generation
         repeat {
             rerunCommands = false
             do {
                 for row in try await engine.pendingCommands() {
-                    if Date.now.timeIntervalSince(row.createdAt) <= 10 {
-                        if let cmd = SessionCommand.parse(row) { _ = Self.perform(cmd, on: app) }
-                        else { Self.log.error("unparseable command \(row.kind, privacy: .public)") }
+                    guard gen == generation else { return }
+                    let age = Date.now.timeIntervalSince(row.createdAt)
+                    if age <= 10 {
+                        if let cmd = SessionCommand.parse(row) {
+                            if !Self.perform(cmd, on: app), case .start = cmd {
+                                // The project may have been created on the phone moments ago: pull once and retry.
+                                await syncNow()
+                                _ = Self.perform(cmd, on: app)
+                            }
+                        } else { Self.log.error("unparseable command \(row.kind, privacy: .public)") }
+                    } else {
+                        Self.log.info("discarded stale command \(row.kind, privacy: .public), age \(Int(age))s")
                     }
                     try await engine.deleteCommand(row.id) // deleting is the acknowledgement
                 }
             } catch { Self.log.error("commands: \(error.localizedDescription, privacy: .public)") }
-        } while rerunCommands
+        } while rerunCommands && gen == generation
     }
 
     /// Signed-out data is local-only: the next account to sign in receives everything.

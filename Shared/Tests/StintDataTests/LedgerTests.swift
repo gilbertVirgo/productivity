@@ -67,6 +67,19 @@ import Core
         #expect(pts.map(\.kind) == ["focus", "offtask"])
     }
 
+    @Test func recoveredOrphanIsDirty() throws {
+        let ctx = try makeCtx()
+        let p = project(ctx)
+        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
+        try Ledger.checkpoint(ctx, record: rec, events: [], allowAdded: [], at: t0 + 1200)
+        rec.syncedAt = rec.updatedAt
+        #expect(!rec.isDirty)
+        try Ledger.recoverOrphans(ctx, now: t0 + 99999)
+        #expect(rec.endedAt != nil)
+        #expect(rec.isDirty)
+    }
+
     @Test func allowAddedKeptSeparateFromSnapshotAndPairedWithReasons() throws {
         let ctx = try makeCtx()
         let p = project(ctx)
