@@ -43,12 +43,11 @@ public enum Mapping {
         let snapshot = (try? JSONDecoder().decode([AllowEntry].self, from: s.allowData)) ?? []
         let added = (try? JSONDecoder().decode([AllowEntry].self, from: s.allowAddedData)) ?? []
         let events = (try? JSONDecoder().decode([SessionEvent].self, from: s.eventsData)) ?? []
-        let entries = snapshot.map { ($0, false) } + added.map { ($0, true) }
-        let allow = entries.enumerated().map { i, a in
-            let addedIdx = i - snapshot.count
-            return SessionAllowRow(id: SyncIDs.derived(s.id, "allow", i), userID: userID, sessionID: s.id,
-                                   kind: a.0.kind.rawValue, value: a.0.value, label: "", addedMidSession: a.1,
-                                   reason: a.1 && s.allowReasons.indices.contains(addedIdx) ? s.allowReasons[addedIdx] : nil)
+        let entries = snapshot.enumerated().map { ($1, false, SyncIDs.derived(s.id, "snap", $0), String?.none) }
+            + added.enumerated().map { ($1, true, SyncIDs.derived(s.id, "add", $0), s.allowReasons.indices.contains($0) ? s.allowReasons[$0] : nil) }
+        let allow = entries.map { a, isAdded, id, reason in
+            SessionAllowRow(id: id, userID: userID, sessionID: s.id, kind: a.kind.rawValue, value: a.value, label: "",
+                            addedMidSession: isAdded, reason: reason)
         }
         let ev = events.enumerated().map { i, e in
             SessionEventRow(id: SyncIDs.derived(s.id, "event", i), userID: userID, sessionID: s.id, at: e.at,
@@ -118,8 +117,8 @@ public enum Mapping {
     /// nil when the parent project is not local yet.
     public static func insert(_ r: ProjectAllowRow, in ctx: ModelContext) -> AllowRule? {
         guard let p = project(r.projectID, ctx) else { return nil }
-        let a = AllowRule(AllowEntry(.app, "x"), label: r.label, now: r.updatedAt)
-        a.id = r.id; a.kind = r.kind; a.value = r.value; a.syncedAt = r.updatedAt
+        let a = AllowRule(AllowEntry(AllowKind(rawValue: r.kind) ?? .app, r.value), label: r.label, now: r.updatedAt)
+        a.id = r.id; a.kind = r.kind; a.value = r.value; a.syncedAt = r.updatedAt // raw overwrite: keep server value verbatim
         ctx.insert(a)
         a.project = p
         return a

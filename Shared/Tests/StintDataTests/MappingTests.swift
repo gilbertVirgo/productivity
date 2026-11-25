@@ -66,7 +66,7 @@ import Core
         #expect(events.map(\.id) == (0..<3).map { SyncIDs.derived(s.id, "event", $0) })
         #expect(events[0].detail == ["domain": "z.com"])
         #expect(events[1].detail == [:])
-        #expect(Set(allow.map(\.id)).count == 3)
+        #expect(allow.map(\.id) == [SyncIDs.derived(s.id, "snap", 0), SyncIDs.derived(s.id, "snap", 1), SyncIDs.derived(s.id, "add", 0)])
     }
 
     @Test func sessionApplySkipsRunning() throws {
