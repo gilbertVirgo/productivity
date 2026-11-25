@@ -14,6 +14,7 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     MARKETING_VERSION: "0.1"
+    STINT_TEAM_ID: "63Q7M3DVRK"
     STINT_SUPABASE_URL: "http:/$()/127.0.0.1:54321"
     STINT_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
     CURRENT_PROJECT_VERSION: "1"
@@ -57,7 +58,7 @@ targets:
         PRODUCT_NAME: Stint
         PRODUCT_BUNDLE_IDENTIFIER: dev.stint.mac
         CODE_SIGN_IDENTITY: "Apple Development"
-        DEVELOPMENT_TEAM: 63Q7M3DVRK
+        DEVELOPMENT_TEAM: $(STINT_TEAM_ID)
         CODE_SIGN_STYLE: Manual
         ENABLE_HARDENED_RUNTIME: YES
     scheme:
@@ -73,7 +74,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: dev.stint.mac.tests
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_IDENTITY: "Apple Development"
-        DEVELOPMENT_TEAM: 63Q7M3DVRK
+        DEVELOPMENT_TEAM: $(STINT_TEAM_ID)
         CODE_SIGN_STYLE: Manual
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Stint.app/Contents/MacOS/Stint"
         BUNDLE_LOADER: "$(TEST_HOST)"
@@ -105,13 +106,14 @@ targets:
       path: iOS/Stint.entitlements
       properties:
         com.apple.security.application-groups: [group.dev.stint]
+        com.apple.developer.applesignin: [Default]
     settings:
       base:
         PRODUCT_NAME: Stint
         PRODUCT_BUNDLE_IDENTIFIER: dev.stint.ios
         TARGETED_DEVICE_FAMILY: "1"
-        CODE_SIGN_IDENTITY: "-"
-        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: $(STINT_TEAM_ID)
     scheme:
       testTargets: [StintPhoneTests]
   StintPhoneTests:
@@ -124,8 +126,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.stint.ios.tests
         GENERATE_INFOPLIST_FILE: YES
-        CODE_SIGN_IDENTITY: "-"
-        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: $(STINT_TEAM_ID)
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Stint.app/Stint"
         BUNDLE_LOADER: "$(TEST_HOST)"
   StintWidgets:
@@ -154,5 +156,5 @@ targets:
         PRODUCT_NAME: StintWidgets
         PRODUCT_BUNDLE_IDENTIFIER: dev.stint.ios.widgets
         TARGETED_DEVICE_FAMILY: "1"
-        CODE_SIGN_IDENTITY: "-"
-        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: $(STINT_TEAM_ID)

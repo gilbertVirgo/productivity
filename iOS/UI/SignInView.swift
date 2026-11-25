@@ -1,9 +1,11 @@
 import SwiftUI
+import AuthenticationServices
 
 struct SignInView: View {
     @Environment(PhoneSync.self) private var sync
     @State private var email = ""
     @State private var code = ""
+    @State private var nonce = ""
 
     var body: some View {
         NavigationStack {
@@ -11,6 +13,18 @@ struct SignInView: View {
                 if !sync.configured {
                     Text("Sync not configured").foregroundStyle(.secondary)
                 } else {
+                    Section {
+                        SignInWithAppleButton(.signIn) { req in
+                            nonce = AppleNonce.random()
+                            req.requestedScopes = [.email]
+                            req.nonce = AppleNonce.sha256(nonce)
+                        } onCompletion: { result in
+                            Task { await sync.signInWithApple(result, nonce: nonce) }
+                        }
+                        .frame(height: 44)
+                        Text("Choose Share My Email to use the same account as your Mac.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
                     Section {
                         TextField("Email", text: $email)
                             .textContentType(.emailAddress).keyboardType(.emailAddress)

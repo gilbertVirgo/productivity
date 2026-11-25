@@ -385,10 +385,10 @@
     // `twitter`, `x`, `slack_oidc`, `spotify`, `workos`, `zoom`.
     "external": {
       "apple": {
-        "enabled": false,
-        "client_id": "",
+        "enabled": true,
+        "client_id": "dev.stint.ios",
         // DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
-        "secret": "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)",
+        "secret": "",
         // Overrides the default auth callback URL derived from auth.external_url.
         "redirect_uri": "",
         // Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,

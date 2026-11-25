@@ -5,6 +5,7 @@ import StintData
 import Core
 import os
 import WidgetKit
+import AuthenticationServices
 
 /// The phone's sync: auth, push/pull through the shared SyncEngine, the session feed, and commands to the Mac.
 @MainActor @Observable
@@ -89,6 +90,21 @@ final class PhoneSync {
         lastError = nil
         do { try await client.auth.signInWithOTP(email: email); state = .signingIn }
         catch { lastError = error.localizedDescription }
+    }
+
+    func signInWithApple(_ result: Result<ASAuthorization, Error>, nonce: String) async {
+        guard let client else { return }
+        lastError = nil
+        do {
+            let auth = try result.get()
+            guard let cred = auth.credential as? ASAuthorizationAppleIDCredential,
+                  let data = cred.identityToken, let token = String(data: data, encoding: .utf8) else {
+                lastError = "Apple didn't return an identity token."; return
+            }
+            let s = try await client.auth.signInWithIdToken(credentials: .init(provider: .apple, idToken: token, nonce: nonce))
+            signedIn(s.user)
+            await setActive(true)
+        } catch { lastError = error.localizedDescription }
     }
 
     func cancelSignIn() { lastError = nil; state = .signedOut; pendingStart = nil }
