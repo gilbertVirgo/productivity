@@ -56,7 +56,8 @@ targets:
       base:
         PRODUCT_NAME: Stint
         PRODUCT_BUNDLE_IDENTIFIER: dev.stint.mac
-        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: 63Q7M3DVRK
         CODE_SIGN_STYLE: Manual
         ENABLE_HARDENED_RUNTIME: YES
     scheme:
@@ -71,7 +72,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.stint.mac.tests
         GENERATE_INFOPLIST_FILE: YES
-        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_IDENTITY: "Apple Development"
+        DEVELOPMENT_TEAM: 63Q7M3DVRK
         CODE_SIGN_STYLE: Manual
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Stint.app/Contents/MacOS/Stint"
         BUNDLE_LOADER: "$(TEST_HOST)"
