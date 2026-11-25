@@ -205,16 +205,16 @@ final class SyncCoordinator {
         try ctx.save()
     }
 
-    /// True when the command was acted on.
     /// What the phone shows when the Mac can't act on a command.
     static func rejectionReason(_ cmd: SessionCommand?, isRunning: Bool) -> String {
         switch cmd {
         case nil: "Your Mac couldn't read that request. Update Stint on both devices."
-        case .start: isRunning ? "A session is already running on your Mac." : "Your Mac doesn't have that project yet. Try again in a minute."
+        case .start: isRunning ? "A session is already running on your Mac." : "Your Mac doesn't have that project, or it's archived. If you just created it, try again in a minute."
         case .takeBreak, .resume, .endEarly: "No session is running on your Mac."
         }
     }
 
+    /// True when the command was acted on.
     static func perform(_ cmd: SessionCommand, on app: AppState) -> Bool {
         switch cmd {
         case let .start(projectID, plannedMin, firstTaskID):
