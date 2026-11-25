@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import AuthenticationServices
 import SwiftData
 import Core
 import StintData
@@ -17,6 +18,13 @@ import StintData
     @Test func unconfiguredStaysSignedOut() throws {
         let s = PhoneSync(context: try ctx(), defaults: defaults(), info: [:])
         #expect(!s.configured && s.state == .signedOut)
+    }
+
+    @MainActor @Test func cancelledAppleSignInDropsStashedStart() async throws {
+        let s = PhoneSync(context: try ctx(), defaults: defaults(), info: ["StintSupabaseURL": "http://127.0.0.1:1", "StintSupabaseAnonKey": "k"])
+        s.pendingStart = UUID()
+        await s.signInWithApple(.failure(ASAuthorizationError(.canceled)), nonce: "n")
+        #expect(s.pendingStart == nil && s.lastError == nil)
     }
 
     @Test func wipeEmptiesStoreAndSyncKeys() throws {

@@ -104,6 +104,8 @@ final class PhoneSync {
             let s = try await client.auth.signInWithIdToken(credentials: .init(provider: .apple, idToken: token, nonce: nonce))
             signedIn(s.user)
             await setActive(true)
+            await flushPendingStart()
+        } catch let e as ASAuthorizationError where e.code == .canceled { pendingStart = nil
         } catch { lastError = error.localizedDescription }
     }
 
