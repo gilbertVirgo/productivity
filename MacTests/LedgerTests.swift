@@ -23,12 +23,12 @@ import Core
         let ctx = try makeCtx()
         let p = project(ctx)
         let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
-        let rec = Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
+        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
         let result = SessionResult(
             totals: SessionTotals(focusedSec: 3000), completed: true,
             points: [PointLine(kind: .focus, delta: 50), PointLine(kind: .sessionComplete, delta: 10)],
             events: [], allowAdded: [])
-        Ledger.close(ctx, record: rec, result: result, endedAt: t0 + 3000, earlyReason: nil)
+        try Ledger.close(ctx, record: rec, result: result, endedAt: t0 + 3000, earlyReason: nil)
         #expect(rec.endKind == "completed")
         #expect(rec.focusedSec == 3000)
         let pts = try ctx.fetch(FetchDescriptor<PointEvent>())
@@ -52,11 +52,11 @@ import Core
         let ctx = try makeCtx()
         let p = project(ctx)
         let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
-        let rec = Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
-        Ledger.checkpoint(ctx, record: rec,
+        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
+        try Ledger.checkpoint(ctx, record: rec,
                           events: [SessionEvent(.offtaskStart, at: t0 + 600), SessionEvent(.offtaskEnd, at: t0 + 900)],
                           allow: [], at: t0 + 1200)
-        Ledger.recoverOrphans(ctx, now: t0 + 99999)
+        try Ledger.recoverOrphans(ctx, now: t0 + 99999)
         #expect(rec.endKind == "early")
         #expect(rec.earlyReason == "Stint quit during session")
         #expect(rec.endedAt == rec.updatedAt)
@@ -71,13 +71,25 @@ import Core
         let ctx = try makeCtx()
         let p = project(ctx)
         let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
-        let a = Ledger.openSession(ctx, project: p, plannedMin: 25, firstTask: nil, startedAt: t0, allow: [])
+        let a = try Ledger.openSession(ctx, project: p, plannedMin: 25, firstTask: nil, startedAt: t0, allow: [])
         let r = SessionResult(totals: SessionTotals(focusedSec: 600), completed: false, points: [], events: [], allowAdded: [])
-        Ledger.close(ctx, record: a, result: r, endedAt: t0 + 600, earlyReason: "x")
-        _ = Ledger.openSession(ctx, project: p, plannedMin: 25, firstTask: nil, startedAt: t0 + 1000, allow: [])
+        try Ledger.close(ctx, record: a, result: r, endedAt: t0 + 600, earlyReason: "x")
+        _ = try Ledger.openSession(ctx, project: p, plannedMin: 25, firstTask: nil, startedAt: t0 + 1000, allow: [])
         let s = Ledger.summaries(ctx, since: t0 - 1)
         #expect(s.count == 1)
         #expect(s[0].focusedSec == 600)
         #expect(Ledger.summaries(ctx, since: t0 + 1).isEmpty)
+    }
+
+    @Test func closeIsIdempotent() throws {
+        let ctx = try makeCtx()
+        let p = project(ctx)
+        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 25, firstTask: nil, startedAt: t0, allow: [])
+        let r = SessionResult(totals: SessionTotals(focusedSec: 600), completed: false,
+                              points: [PointLine(kind: .focus, delta: 10)], events: [], allowAdded: [])
+        try Ledger.close(ctx, record: rec, result: r, endedAt: t0 + 600, earlyReason: nil)
+        try Ledger.close(ctx, record: rec, result: r, endedAt: t0 + 700, earlyReason: nil)
+        #expect(try ctx.fetch(FetchDescriptor<PointEvent>()).count == 1)
     }
 }

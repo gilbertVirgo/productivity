@@ -1,52 +1,58 @@
 import Foundation
 import SwiftData
 import Core
+import os
 
 enum LedgerError: Error { case insufficientPoints }
 
 @MainActor
 enum Ledger {
-    private static func enc<T: Encodable>(_ v: T) -> Data { (try? JSONEncoder().encode(v)) ?? Data("[]".utf8) }
+    private static let log = Logger(subsystem: "dev.stint.mac", category: "ledger")
+    private static func enc<T: Encodable>(_ v: T) throws -> Data { try JSONEncoder().encode(v) }
     private static func dec<T: Decodable>(_ d: Data) -> [T] { (try? JSONDecoder().decode([T].self, from: d)) ?? [] }
 
     static func openSession(_ ctx: ModelContext, project: Project, plannedMin: Int, firstTask: TaskItem?,
-                            startedAt: Date, allow: [AllowEntry]) -> SessionRecord {
+                            startedAt: Date, allow: [AllowEntry]) throws -> SessionRecord {
         let r = SessionRecord(projectID: project.id, firstTaskID: firstTask?.id, plannedMin: plannedMin,
-                              startedAt: startedAt, allowData: enc(allow))
+                              startedAt: startedAt, allowData: try enc(allow))
         ctx.insert(r)
-        try? ctx.save()
+        try ctx.save()
         return r
     }
 
-    static func checkpoint(_ ctx: ModelContext, record: SessionRecord, events: [SessionEvent], allow: [AllowEntry], at: Date) {
-        record.eventsData = enc(events)
-        record.allowData = enc(allow)
+    static func checkpoint(_ ctx: ModelContext, record: SessionRecord, events: [SessionEvent], allow: [AllowEntry], at: Date) throws {
+        let e = try enc(events), a = try enc(allow)
+        record.eventsData = e
+        record.allowData = a
         record.updatedAt = at
-        try? ctx.save()
+        try ctx.save()
     }
 
-    static func close(_ ctx: ModelContext, record: SessionRecord, result: SessionResult, endedAt: Date, earlyReason: String?) {
+    static func close(_ ctx: ModelContext, record: SessionRecord, result: SessionResult, endedAt: Date, earlyReason: String?) throws {
+        guard record.endedAt == nil else { return }
+        let events = try enc(result.events)
+        let allow = try enc((dec(record.allowData) as [AllowEntry]) + result.allowAdded)
         let t = result.totals
         record.focusedSec = t.focusedSec; record.offtaskSec = t.offtaskSec; record.breakSec = t.breakSec
         record.idleSec = t.idleSec; record.sleepSec = t.sleepSec
         record.endedAt = endedAt
         record.endKind = result.completed ? "completed" : "early"
         record.earlyReason = earlyReason
-        record.eventsData = enc(result.events)
-        record.allowData = enc((dec(record.allowData) as [AllowEntry]) + result.allowAdded)
+        record.eventsData = events
+        record.allowData = allow
         record.updatedAt = endedAt
         let note = projectName(ctx, record.projectID)
         for l in result.points {
             ctx.insert(PointEvent(at: endedAt, delta: l.delta, kind: l.kind.rawValue, refID: record.id, note: note))
         }
-        try? ctx.save()
+        try ctx.save()
     }
 
     private static func projectName(_ ctx: ModelContext, _ id: UUID) -> String {
         (try? ctx.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == id })))?.first?.name ?? ""
     }
 
-    static func recoverOrphans(_ ctx: ModelContext, now: Date) {
+    static func recoverOrphans(_ ctx: ModelContext, now: Date) throws {
         let open = (try? ctx.fetch(FetchDescriptor<SessionRecord>(predicate: #Predicate { $0.endedAt == nil }))) ?? []
         for r in open {
             let end = r.updatedAt
@@ -55,7 +61,8 @@ enum Ledger {
             let result = SessionResult(totals: t, completed: false,
                                        points: sessionPoints(totals: t, completed: false, breakOverSec: 0),
                                        events: events, allowAdded: [])
-            close(ctx, record: r, result: result, endedAt: end, earlyReason: "Stint quit during session")
+            do { try close(ctx, record: r, result: result, endedAt: end, earlyReason: "Stint quit during session") }
+            catch { log.error("recoverOrphans failed for \(r.id): \(error)") }
         }
     }
 
