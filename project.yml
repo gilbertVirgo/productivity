@@ -1,0 +1,54 @@
+name: Stint
+options:
+  bundleIdPrefix: dev.stint
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  Core:
+    path: Shared
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  StintMac:
+    type: application
+    platform: macOS
+    sources: [Mac]
+    dependencies:
+      - package: Core
+    info:
+      path: Mac/Info.plist
+      properties:
+        CFBundleName: Stint
+        CFBundleDisplayName: Stint
+        LSApplicationCategoryType: public.app-category.productivity
+        NSAppleEventsUsageDescription: "Stint reads the website in your current Safari or Chrome tab to tell whether you're on task. It never reads page content."
+    entitlements:
+      path: Mac/Stint.entitlements
+      properties:
+        com.apple.security.automation.apple-events: true
+    settings:
+      base:
+        PRODUCT_NAME: Stint
+        PRODUCT_BUNDLE_IDENTIFIER: dev.stint.mac
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: YES
+    scheme:
+      testTargets: [StintMacTests]
+  StintMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [MacTests]
+    dependencies:
+      - target: StintMac
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.stint.mac.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Stint.app/Contents/MacOS/Stint"
+        BUNDLE_LOADER: "$(TEST_HOST)"
