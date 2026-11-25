@@ -6,23 +6,29 @@ import Observation
 /// On-device dictation. `unavailable` means: show the typed field instead (spec §6.8).
 @MainActor @Observable
 final class SpeechCapture {
-    enum Mode: Equatable { case idle, recording, unavailable(String) }
+    enum Mode: Equatable { case idle, recording, finishing, unavailable(String) }
     var mode: Mode = .idle
     var transcript = ""
+    /// Editing, recording and parsing are allowed only when no take is in flight.
+    var canEdit: Bool { if case .idle = mode { true } else if case .unavailable = mode { true } else { false } }
 
-    @ObservationIgnored private let audio = AVAudioEngine()
+    @ObservationIgnored private var audio: AVAudioEngine?
     @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
     @ObservationIgnored private var task: SFSpeechRecognitionTask?
     @ObservationIgnored private var take = 0
     @ObservationIgnored private var starting = false
+    @ObservationIgnored private var abandoned = false
 
     func start() async {
-        guard !starting, mode != .recording else { return }
+        guard !starting, mode != .recording, mode != .finishing else { return }
+        abandoned = false
         starting = true; defer { starting = false }
         guard await Self.speechAllowed(), await Self.micAllowed() else {
+            guard !abandoned else { abandoned = false; return }
             mode = .unavailable("Dictation is off for Stint. Type your tasks instead, or allow Microphone and Speech Recognition in Settings.")
             return
         }
+        guard !abandoned else { abandoned = false; return }
         guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
             mode = .unavailable("On-device dictation isn't available here. Type your tasks instead.")
             return
@@ -34,17 +40,23 @@ final class SpeechCapture {
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.requiresOnDeviceRecognition = true
         req.shouldReportPartialResults = true
-        let input = audio.inputNode
-        input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0), block: Self.tap(req))
-        do { audio.prepare(); try audio.start() } catch {
+        let engine = AVAudioEngine()
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            deactivateSession()
+            mode = .unavailable("No microphone available. Type your tasks instead.")
+            return
+        }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tap(req))
+        do { engine.prepare(); try engine.start() } catch {
             input.removeTap(onBus: 0)
             req.endAudio()
-            #if os(iOS)
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            #endif
+            deactivateSession()
             mode = .unavailable("Couldn't use the microphone. Type your tasks instead.")
             return
         }
+        audio = engine
         let base = transcript.isEmpty ? "" : transcript + " " // keep what was there before this take
         request = req
         mode = .recording
@@ -53,18 +65,47 @@ final class SpeechCapture {
         task = recognizer.recognitionTask(with: req, resultHandler: Self.handler { [weak self] text, done in
             guard let self, myTake == self.take else { return }
             if let text { self.transcript = base + text }
-            if done { self.stop() }
+            if done { self.finish() }
         })
     }
 
+    /// Stops the mic and waits (up to 2s) for the recognizer's final result before going idle.
     func stop() {
+        if starting { abandoned = true }
         guard mode == .recording else { return }
-        audio.stop()
-        audio.inputNode.removeTap(onBus: 0)
+        stopAudio()
         request?.endAudio()
-        task?.finish()
-        request = nil; task = nil
+        mode = .finishing
+        let myTake = take
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            if let self, self.take == myTake, self.mode == .finishing { self.finish() }
+        }
+    }
+
+    /// Hard stop for onDisappear: nothing may land after this.
+    func cancel() {
+        if starting { abandoned = true }
+        guard mode == .recording || mode == .finishing else { return }
+        stopAudio()
+        take += 1 // drop any late callbacks
+        finish()
+    }
+
+    private func stopAudio() {
+        audio?.stop()
+        audio?.inputNode.removeTap(onBus: 0)
+        audio = nil
+    }
+
+    private func finish() {
+        task?.cancel()
+        task = nil; request = nil
         mode = .idle
+        deactivateSession()
+    }
+
+    private func deactivateSession() {
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif

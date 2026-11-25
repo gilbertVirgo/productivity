@@ -1,5 +1,11 @@
 import Foundation
 
+/// Thrown when voice parsing is attempted without a signed-in user.
+public struct NotSignedIn: LocalizedError {
+    public init() {}
+    public var errorDescription: String? { "Sign in to sort tasks automatically." }
+}
+
 /// One task as `parse-tasks` returns it.
 public struct ParsedTask: Codable, Equatable, Sendable {
     public var title: String

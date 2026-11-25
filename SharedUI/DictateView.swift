@@ -20,7 +20,7 @@ struct DictateView: View {
         Group {
             if confirming { confirm(drafts) } else { capture }
         }
-        .onDisappear { speech.stop() }
+        .onDisappear { speech.cancel() }
     }
 
     // MARK: capture
@@ -32,19 +32,21 @@ struct DictateView: View {
             TextEditor(text: $speech.transcript)
                 .frame(minHeight: 160)
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
-                .disabled(speech.mode == .recording)
+                .disabled(!speech.canEdit)
             if case let .unavailable(why) = speech.mode { Text(why).font(.footnote).foregroundStyle(Theme.warn) }
             if let message { Text(message).font(.footnote).foregroundStyle(Theme.warn) }
             HStack {
                 if speech.mode == .recording {
                     Button("Stop", systemImage: "stop.circle.fill") { speech.stop() }
+                } else if speech.mode == .finishing {
+                    Button("Finishing…") {}.disabled(true)
                 } else if !isUnavailable {
                     Button("Record", systemImage: "mic.circle.fill") { Task { await speech.start() } }
                 }
                 Spacer()
                 Button("Make tasks") { Task { await makeTasks() } }
                     .buttonStyle(.borderedProminent)
-                    .disabled(working || speech.mode == .recording || speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(working || !speech.canEdit || speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             if working { ProgressView("Sorting your tasks…") }
         }
@@ -69,7 +71,9 @@ struct DictateView: View {
                 else { drafts = d; confirming = true }
             } catch {
                 drafts = VoiceTasks.fallback(text); confirming = true
-                message = "Couldn't sort this automatically. Edit the task below."
+                message = error is NotSignedIn
+                    ? "Sign in to sort tasks automatically. Edit the task below."
+                    : "Couldn't sort this automatically. Edit the task below."
             }
         }
     }
@@ -83,6 +87,7 @@ struct DictateView: View {
             List {
                 ForEach($drafts) { $d in row($d) }
             }
+            if projects.isEmpty { Text("Add a project first, then add these tasks.").font(.footnote).foregroundStyle(Theme.warn) }
             HStack {
                 Button("Back") { confirming = false; message = nil }
                 Spacer()

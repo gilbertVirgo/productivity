@@ -42,7 +42,7 @@ export async function handle(req: Request, call: Caller | null): Promise<Respons
   if ([...transcript].length > MAX_TRANSCRIPT) return json(413, { error: "too_long" });
   const projects = (Array.isArray(body.projects) ? body.projects : []).filter(
     (p): p is Project => typeof p?.id === "string" && typeof p?.name === "string",
-  ).map(({ id, name }) => ({ id, name }));
+  ).slice(0, 200).map(({ id, name }) => ({ id, name: name.slice(0, 100) }));
   if (!call) return json(503, { error: "ai_unavailable" });
   try {
     return json(200, { tasks: clean(await call(transcript, projects), projects) });

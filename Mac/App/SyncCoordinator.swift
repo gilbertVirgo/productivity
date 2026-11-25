@@ -107,8 +107,6 @@ final class SyncCoordinator {
 
     // MARK: sync
 
-    struct NotSignedIn: LocalizedError { var errorDescription: String? { "Sign in to sort tasks automatically." } }
-
     func parseTasks(_ transcript: String, projects: [Project]) async throws -> [ParsedTask] {
         guard let engine, userID != nil else { throw NotSignedIn() }
         return try await engine.parseTasks(transcript: transcript, projects: projects)

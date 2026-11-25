@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { clean, handle, MAX_TRANSCRIPT, type Caller } from "./parse.ts";
+import { clean, handle, MAX_TRANSCRIPT, type Caller, type Project } from "./parse.ts";
 
 const P = [{ id: "11111111-1111-1111-1111-111111111111", name: "Northwind" }];
 
@@ -54,6 +54,15 @@ Deno.test("passes the transcript and only well-formed projects to Claude", async
   const spy: Caller = async (t, p) => { seen = [t, p]; return { tasks: [] }; };
   await handle(req({ transcript: "  hi  ", projects: [...P, { id: 3 }, "x"] }), spy);
   assertEquals(seen, ["hi", P]);
+});
+
+Deno.test("caps projects at 200 and names at 100 chars", async () => {
+  let seen: Project[] = [];
+  const spy: Caller = async (_t, p) => { seen = p; return { tasks: [] }; };
+  const many = Array.from({ length: 250 }, (_, i) => ({ id: `id${i}`, name: i === 0 ? "n".repeat(150) : "p" }));
+  await handle(req({ transcript: "hi", projects: many }), spy);
+  assertEquals(seen.length, 200);
+  assertEquals(seen[0].name.length, 100);
 });
 
 Deno.test("error statuses", async () => {

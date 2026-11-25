@@ -470,6 +470,12 @@
     // },
   },
 
+  "functions": {
+    // role() in parse.ts trusts the JWT payload only because the gateway verifies the signature.
+    // Never set this to false.
+    "parse-tasks": { "verify_jwt": true },
+  },
+
   "analytics": {
     "enabled": true,
     "port": 54327,
