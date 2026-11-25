@@ -36,4 +36,20 @@ import StintData
         #expect(!SyncCoordinator.perform(.takeBreak, on: app))
         #expect(!SyncCoordinator.perform(.resume, on: app))
     }
+
+    @Test func resetSyncStateMakesEverythingDirty() throws {
+        let (_, p, keep) = try make()
+        let ctx = keep.mainContext
+        p.syncedAt = .now.addingTimeInterval(60)
+        let t = Treat(name: "Coffee", cost: 5); t.syncedAt = .now.addingTimeInterval(60); ctx.insert(t)
+        ctx.insert(Tombstone(table: "task", rowID: UUID()))
+        try ctx.save()
+        let d = UserDefaults(suiteName: "reset-\(UUID())")!
+        d.set(1.0, forKey: "sync.watermark.project"); d.set(2.0, forKey: "profileUpdatedAt")
+        #expect(!p.isDirty)
+        try SyncCoordinator.resetSyncState(ctx, defaults: d)
+        #expect(p.isDirty && t.isDirty)
+        #expect(d.object(forKey: "sync.watermark.project") == nil && d.object(forKey: "profileUpdatedAt") == nil)
+        #expect(try ctx.fetch(FetchDescriptor<Tombstone>()).isEmpty)
+    }
 }

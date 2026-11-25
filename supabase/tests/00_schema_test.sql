@@ -6,7 +6,7 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'a@test.local'),
   ('00000000-0000-0000-0000-00000000000b', 'b@test.local');
 
-select is((select count(*)::int from public.profile), 2, 'signup creates a profile per user');
+select is((select count(*)::int from public.profile where user_id in ('00000000-0000-0000-0000-00000000000a','00000000-0000-0000-0000-00000000000b')), 2, 'signup creates a profile per user');
 
 -- act as A
 set local role authenticated;

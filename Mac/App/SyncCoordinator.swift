@@ -16,16 +16,19 @@ final class SyncCoordinator {
     let configured: Bool
 
     @ObservationIgnored private let app: AppState
+    @ObservationIgnored private let ctx: ModelContext?
     @ObservationIgnored private let client: SupabaseClient?
     @ObservationIgnored private let engine: SyncEngine?
     @ObservationIgnored private var userID: UUID?
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var debounce: Task<Void, Never>?
     @ObservationIgnored private var syncing = false
+    @ObservationIgnored private var syncAgain = false
     @ObservationIgnored private var handling = false
+    @ObservationIgnored private var rerunCommands = false
 
     init(app: AppState, context: ModelContext) {
-        self.app = app
+        self.app = app; self.ctx = context
         let info = Bundle.main.infoDictionary
         func value(_ k: String) -> String? { (info?[k] as? String).flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : $0 } }
         if let u = value("StintSupabaseURL").flatMap(URL.init(string:)), let key = value("StintSupabaseAnonKey") {
@@ -56,6 +59,8 @@ final class SyncCoordinator {
         catch { lastError = error.localizedDescription }
     }
 
+    func cancelSignIn() { lastError = nil; state = .signedOut }
+
     func verify(email: String, code: String) async {
         guard let client else { return }
         lastError = nil
@@ -67,8 +72,10 @@ final class SyncCoordinator {
 
     func signOut() async {
         timer?.invalidate(); timer = nil
+        debounce?.cancel(); debounce = nil
         await engine?.stopRealtime()
         try? await client?.auth.signOut()
+        if let ctx { try? Self.resetSyncState(ctx) }
         userID = nil; lastSync = nil; lastError = nil; state = .signedOut
     }
 
@@ -77,14 +84,18 @@ final class SyncCoordinator {
         state = .signedIn(email: user.email ?? "")
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in await self?.syncNow() }
+            Task { @MainActor in
+                await self?.handlePending()
+                await self?.syncNow()
+            }
         }
-        await syncNow()
+        // Commands first: a slow first sync must not age them past 10 s.
         await engine?.startRealtime { [weak self] in
             self?.syncSoon()
             Task { await self?.handlePending() }
         }
         await handlePending()
+        await syncNow()
     }
 
     // MARK: sync
@@ -100,32 +111,53 @@ final class SyncCoordinator {
     }
 
     func syncNow() async {
-        guard let engine, let userID, !syncing else { return }
+        guard let engine, let userID else { return }
+        if syncing { syncAgain = true; return }
         syncing = true; defer { syncing = false }
-        do {
-            try await engine.push(userID: userID)
-            try await engine.pull()
-            lastSync = .now; lastError = nil
-        } catch {
-            lastError = error.localizedDescription
-            Self.log.error("sync: \(error.localizedDescription, privacy: .public)")
-        }
+        repeat {
+            syncAgain = false
+            do {
+                try await engine.push(userID: userID)
+                try await engine.pull()
+                lastSync = .now; lastError = nil
+            } catch {
+                lastError = error.localizedDescription
+                Self.log.error("sync: \(error.localizedDescription, privacy: .public)")
+            }
+        } while syncAgain && self.userID != nil
     }
 
     // MARK: phone commands
 
     private func handlePending() async {
-        guard let engine, !handling else { return }
+        guard let engine else { return }
+        if handling { rerunCommands = true; return }
         handling = true; defer { handling = false }
-        do {
-            for row in try await engine.pendingCommands() {
-                if Date.now.timeIntervalSince(row.createdAt) <= 10 {
-                    if let cmd = SessionCommand.parse(row) { _ = Self.perform(cmd, on: app) }
-                    else { Self.log.error("unparseable command \(row.kind, privacy: .public)") }
+        repeat {
+            rerunCommands = false
+            do {
+                for row in try await engine.pendingCommands() {
+                    if Date.now.timeIntervalSince(row.createdAt) <= 10 {
+                        if let cmd = SessionCommand.parse(row) { _ = Self.perform(cmd, on: app) }
+                        else { Self.log.error("unparseable command \(row.kind, privacy: .public)") }
+                    }
+                    try await engine.deleteCommand(row.id) // deleting is the acknowledgement
                 }
-                try await engine.deleteCommand(row.id) // deleting is the acknowledgement
-            }
-        } catch { Self.log.error("commands: \(error.localizedDescription, privacy: .public)") }
+            } catch { Self.log.error("commands: \(error.localizedDescription, privacy: .public)") }
+        } while rerunCommands
+    }
+
+    /// Signed-out data is local-only: the next account to sign in receives everything.
+    static func resetSyncState(_ ctx: ModelContext, defaults: UserDefaults = .standard) throws {
+        for k in defaults.dictionaryRepresentation().keys where k.hasPrefix("sync.watermark.") { defaults.removeObject(forKey: k) }
+        defaults.removeObject(forKey: "profileUpdatedAt")
+        func clear<M: PersistentModel & Syncable>(_ t: M.Type) throws {
+            for var m in try ctx.fetch(FetchDescriptor<M>()) { m.syncedAt = nil }
+        }
+        try clear(Project.self); try clear(AllowRule.self); try clear(TaskItem.self)
+        try clear(SessionRecord.self); try clear(PointEvent.self); try clear(Treat.self)
+        for t in try ctx.fetch(FetchDescriptor<Tombstone>()) { ctx.delete(t) }
+        try ctx.save()
     }
 
     /// True when the command was acted on.
