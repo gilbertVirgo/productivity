@@ -49,10 +49,13 @@ targets:
           NSAllowsLocalNetworking: true
         LSApplicationCategoryType: public.app-category.productivity
         NSAppleEventsUsageDescription: "Stint reads the website in your current Safari or Chrome tab to tell whether you're on task. It never reads page content."
+        NSMicrophoneUsageDescription: "Stint listens while you dictate tasks. Audio stays on this device."
+        NSSpeechRecognitionUsageDescription: "Stint turns your dictation into text on this device, then into a task list."
     entitlements:
       path: Mac/Stint.entitlements
       properties:
         com.apple.security.automation.apple-events: true
+        com.apple.security.device.audio-input: true
     settings:
       base:
         PRODUCT_NAME: Stint
@@ -93,6 +96,8 @@ targets:
       path: iOS/Info.plist
       properties:
         CFBundleDisplayName: Stint
+        NSMicrophoneUsageDescription: "Stint listens while you dictate tasks. Audio stays on this device."
+        NSSpeechRecognitionUsageDescription: "Stint turns your dictation into text on this device, then into a task list."
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         StintSupabaseURL: $(STINT_SUPABASE_URL)

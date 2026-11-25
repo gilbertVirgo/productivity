@@ -2,6 +2,7 @@ import Foundation
 import SwiftData
 import Supabase
 import StintData
+import Core
 import os
 
 @MainActor @Observable
@@ -105,6 +106,13 @@ final class SyncCoordinator {
     }
 
     // MARK: sync
+
+    struct NotSignedIn: LocalizedError { var errorDescription: String? { "Sign in to sort tasks automatically." } }
+
+    func parseTasks(_ transcript: String, projects: [Project]) async throws -> [ParsedTask] {
+        guard let engine, userID != nil else { throw NotSignedIn() }
+        return try await engine.parseTasks(transcript: transcript, projects: projects)
+    }
 
     func syncSoon() {
         guard userID != nil else { return }

@@ -6,6 +6,8 @@ import Core
 struct TodayView: View {
     @Environment(AppState.self) private var app
     @Environment(\.modelContext) private var ctx
+    @Environment(SyncCoordinator.self) private var sync
+    @State private var dictating = false
     @Query(filter: #Predicate<Project> { $0.archivedAt == nil }, sort: \Project.name) private var projects: [Project]
     @Query private var sessions: [SessionRecord]   // observed so numbers refresh when a session closes
     @Query private var events: [PointEvent]
@@ -34,7 +36,11 @@ struct TodayView: View {
                 }
                 startBar
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("This week").font(.title3.bold())
+                    HStack {
+                        Text("This week").font(.title3.bold())
+                        Spacer()
+                        Button("Dictate tasks", systemImage: "mic") { dictating = true }
+                    }
                     if projects.isEmpty { Text("Add a project in Projects to set goals.").foregroundStyle(.secondary) }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 12)], spacing: 12) {
                         ForEach(projects) { card($0, now: now, day: day, week: week, summaries: summaries) }
@@ -45,6 +51,13 @@ struct TodayView: View {
                     ForEach(projects) { TaskGroup(project: $0, dayStart: day.start) }
                 }
             }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .sheet(isPresented: $dictating) {
+            DictateView(parse: { try await sync.parseTasks($0, projects: $1) }) { _ in
+                dictating = false; sync.syncSoon()
+            }
+            .frame(minWidth: 560, minHeight: 520)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dictating = false } } }
         }
     }
 

@@ -31,6 +31,10 @@
 	</dict>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Stint reads the website in your current Safari or Chrome tab to tell whether you're on task. It never reads page content.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Stint listens while you dictate tasks. Audio stays on this device.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Stint turns your dictation into text on this device, then into a task list.</string>
 	<key>StintSupabaseAnonKey</key>
 	<string>$(STINT_SUPABASE_ANON_KEY)</string>
 	<key>StintSupabaseURL</key>

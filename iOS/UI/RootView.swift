@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum Tab: Hashable { case today, tasks, week, rewards }
+enum Tab: Hashable { case today, tasks, dictate, week, rewards }
 
 struct RootView: View {
     @Environment(PhoneSync.self) private var sync
@@ -16,6 +16,13 @@ struct RootView: View {
             TabView(selection: $tab) {
                 TodayView().tabItem { Label("Today", systemImage: "sun.max") }.tag(Tab.today)
                 TasksView().tabItem { Label("Tasks", systemImage: "checklist") }.tag(Tab.tasks)
+                NavigationStack {
+                    DictateView(parse: { try await sync.parseTasks($0, projects: $1) }) { _ in
+                        sync.syncSoon(); tab = .tasks
+                    }
+                    .navigationTitle("Dictate")
+                }
+                .tabItem { Label("Dictate", systemImage: "mic.fill") }.tag(Tab.dictate)
                 WeekView().tabItem { Label("Week", systemImage: "calendar") }.tag(Tab.week)
                 RewardsView().tabItem { Label("Rewards", systemImage: "gift") }.tag(Tab.rewards)
             }
