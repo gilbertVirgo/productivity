@@ -26,7 +26,7 @@ import Foundation
         _ = e.observe(bundleID: spotify, host: nil, at: at(60))
         #expect(e.tick(at: at(75)) == [.offTaskStarted(bundleID: spotify, host: nil)])
         #expect(e.observe(bundleID: figma, host: nil, at: at(120)) == [.offTaskEnded])
-        #expect(e.events == [SessionEvent(.offtaskStart, at: at(75)), SessionEvent(.offtaskEnd, at: at(120))])
+        #expect(e.events == [SessionEvent(.offtaskStart, at: at(75), detail: ["bundle_id": spotify]), SessionEvent(.offtaskEnd, at: at(120))])
         #expect(e.lastOnTaskBundleID == figma)
     }
 
@@ -100,5 +100,36 @@ import Foundation
             PointLine(kind: .sessionComplete, delta: 10),
             PointLine(kind: .breakOver, delta: -12),
         ])
+    }
+
+    @Test func offtaskStartDetailIncludesDomain() {
+        var e = engine()
+        _ = e.observe(bundleID: "com.apple.Safari", host: "reddit.com", at: at(0))
+        _ = e.tick(at: at(15))
+        #expect(e.events.first?.detail == ["bundle_id": "com.apple.Safari", "domain": "reddit.com"])
+    }
+
+    @Test func eventWithoutDetailDecodes() throws {
+        let json = #"{"type":"break_start","at":0}"#
+        let ev = try JSONDecoder().decode(SessionEvent.self, from: Data(json.utf8))
+        #expect(ev.type == .breakStart && ev.detail == nil)
+    }
+
+    @Test func backdatedIdleCountsFromStartOfInactivity() {
+        var e = engine()
+        _ = e.observe(bundleID: figma, host: nil, at: at(0))
+        _ = e.tick(at: at(400))
+        _ = e.setIdle(true, at: at(100))
+        _ = e.setIdle(false, at: at(500))
+        let t = e.totals(at: at(500))
+        #expect(t.focusedSec == 100 && t.idleSec == 400)
+    }
+
+    @Test func allowCurrentDoesNotDuplicateAddedEntry() {
+        var e = engine()
+        _ = e.observe(bundleID: spotify, host: nil, at: at(0))
+        _ = e.allowCurrent(at: at(1))
+        _ = e.allowCurrent(at: at(2))
+        #expect(e.allowAdded == [AllowEntry(.app, spotify)])
     }
 }

@@ -10,10 +10,13 @@ public enum SessionEventType: String, Codable, Sendable {
 public struct SessionEvent: Hashable, Codable, Sendable {
     public var type: SessionEventType
     public var at: Date
+    /// Spec §5 session_event.detail, e.g. `bundle_id` / `domain` on `offtask_start`.
+    public var detail: [String: String]?
 
-    public init(_ type: SessionEventType, at: Date) {
+    public init(_ type: SessionEventType, at: Date, detail: [String: String]? = nil) {
         self.type = type
         self.at = at
+        self.detail = detail
     }
 }
 

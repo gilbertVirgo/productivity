@@ -73,6 +73,8 @@ public struct SessionEngine: Sendable {
     public mutating func setIdle(_ value: Bool, at now: Date) -> [Signal] {
         guard value != idle else { return [] }
         idle = value
+        // `now` may be backdated (idle is detected after the threshold); never before the last recorded event.
+        let now = max(now, startedAt, events.last?.at ?? startedAt)
         let signals = resuspend(at: now)
         events.append(SessionEvent(value ? .idleStart : .idleEnd, at: now))
         return signals
@@ -95,7 +97,7 @@ public struct SessionEngine: Sendable {
         } else {
             entry = AllowEntry(.app, f.bundleID)
         }
-        allowAdded.append(entry)
+        if !allowAdded.contains(entry) { allowAdded.append(entry) }
         return (entry, record(tracker.allow(entry, at: now)))
     }
 
@@ -133,7 +135,9 @@ public struct SessionEngine: Sendable {
         for o in outputs {
             switch o {
             case let .started(at, bundleID, host):
-                events.append(SessionEvent(.offtaskStart, at: at))
+                var detail = ["bundle_id": bundleID]
+                if let host { detail["domain"] = host }
+                events.append(SessionEvent(.offtaskStart, at: at, detail: detail))
                 signals.append(.offTaskStarted(bundleID: bundleID, host: host))
             case let .ended(at):
                 events.append(SessionEvent(.offtaskEnd, at: at))
