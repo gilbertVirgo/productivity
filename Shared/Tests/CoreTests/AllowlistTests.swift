@@ -55,4 +55,21 @@ import Testing
         let l = list([AllowEntry(.domain, "figma.com")])
         #expect(!l.isOnTask(bundleID: "org.mozilla.firefox", host: "figma.com"))
     }
+
+    @Test func domainNormalization() {
+        #expect(AllowEntry(.domain, "https://www.Figma.com/file/abc?x=1").value == "figma.com")
+        #expect(AllowEntry(.domain, "*.linear.app").value == "linear.app")
+        #expect(AllowEntry(.domain, " .notion.so. ").value == "notion.so")
+        #expect(AllowEntry(.domain, "localhost:3000").value == "localhost")
+        #expect(AllowEntry(.app, "  com.Figma.Desktop ").value == "com.figma.desktop")
+    }
+
+    @Test func emptyDomainNeverMatches() {
+        let l = list([AllowEntry(.domain, "  ")])
+        #expect(!l.isOnTask(bundleID: Browsers.safari, host: "youtube.com."))
+    }
+
+    @Test func trailingDotHostMatches() {
+        #expect(list([AllowEntry(.domain, "figma.com")]).isOnTask(bundleID: Browsers.safari, host: "www.figma.com."))
+    }
 }

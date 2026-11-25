@@ -11,7 +11,20 @@ public struct AllowEntry: Hashable, Codable, Sendable {
 
     public init(_ kind: AllowKind, _ value: String) {
         self.kind = kind
-        self.value = value.lowercased()
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.value = kind == .domain ? Self.normalizeDomain(trimmed) : trimmed
+    }
+
+    /// "https://www.Figma.com/x" → "figma.com"; strips scheme, path/query/port, "*.", leading/trailing dots, "www.".
+    public static func normalizeDomain(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let r = s.range(of: "://") { s = String(s[r.upperBound...]) }
+        if let i = s.firstIndex(where: { "/?#:".contains($0) }) { s = String(s[..<i]) }
+        while s.hasPrefix("*.") { s.removeFirst(2) }
+        while s.hasPrefix(".") { s.removeFirst() }
+        while s.hasSuffix(".") { s.removeLast() }
+        if s.hasPrefix("www.") { s.removeFirst(4) }
+        return s
     }
 }
 
@@ -44,8 +57,9 @@ public struct Allowlist: Sendable {
         let id = bundleID.lowercased()
         if alwaysAllowed.contains(id) || extraAllowed.contains(id) || entries.contains(AllowEntry(.app, id)) { return true }
         guard Browsers.supported.contains(id) else { return false }
-        let domains = entries.filter { $0.kind == .domain }.map(\.value)
-        guard let host = host?.lowercased() else { return !domains.isEmpty } // spec 6.4: benefit of the doubt
+        let domains = entries.filter { $0.kind == .domain && !$0.value.isEmpty }.map(\.value)
+        guard var host = host?.lowercased() else { return !domains.isEmpty } // spec 6.4: benefit of the doubt
+        if host.hasSuffix(".") { host.removeLast() }
         return domains.contains { host == $0 || host.hasSuffix("." + $0) }
     }
 }
