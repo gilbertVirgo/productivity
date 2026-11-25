@@ -21,10 +21,15 @@ final class AppState {
     var record: SessionRecord?
     var project: Project?
     var firstTask: TaskItem?
-    var nudge: Nudge?
+    var nudge: Nudge? {
+        didSet {
+            if nudge == nil { panel.hide() } else if oldValue == nil { panel.show(self) }
+        }
+    }
     var automationDenied = false
     var lastResult: (points: Int, completed: Bool)?
 
+    @ObservationIgnored private let panel = NudgePanelController()
     @ObservationIgnored private let ctx: ModelContext
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var monitor: ActivityMonitor?
