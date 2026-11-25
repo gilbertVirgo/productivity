@@ -1,4 +1,5 @@
 import Foundation
+import Core
 
 // Wire rows. CodingKeys match supabase/migrations/20261125000001_schema.sql.
 // Nullable columns are always encoded (explicit null) so clearing a value reaches the server.
@@ -194,4 +195,22 @@ public struct NewSessionCommandRow: Encodable, Sendable {
     public var kind: String
     public var payload: [String: String]
     enum CodingKeys: String, CodingKey { case id, userID = "user_id", kind, payload }
+}
+
+/// `session_totals` view row (read by the phone).
+public struct SessionTotalsRow: Decodable, Sendable, Equatable {
+    public var sessionID: UUID, projectID: UUID
+    public var startedAt: Date, endedAt: Date?
+    public var focusedSec: Int, breakSec: Int
+    enum CodingKeys: String, CodingKey {
+        case sessionID = "session_id", projectID = "project_id", startedAt = "started_at", endedAt = "ended_at"
+        case focusedSec = "focused_sec", breakSec = "break_sec"
+    }
+    public init(sessionID: UUID, projectID: UUID, startedAt: Date, endedAt: Date?, focusedSec: Int, breakSec: Int) {
+        self.sessionID = sessionID; self.projectID = projectID; self.startedAt = startedAt; self.endedAt = endedAt
+        self.focusedSec = focusedSec; self.breakSec = breakSec
+    }
+    public var summary: SessionSummary {
+        SessionSummary(projectID: projectID, startedAt: startedAt, focusedSec: focusedSec, breakSec: breakSec)
+    }
 }

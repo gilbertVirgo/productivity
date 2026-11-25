@@ -152,4 +152,27 @@ struct SyncIntegrationTests {
         #expect(try await phone.command(id) == nil)
         try await client.auth.signOut()
     }
+
+    @Test func phoneFeedReadsMacSessions() async throws {
+        let (client, uid) = try await signedInClient()
+        let mac = try ctx()
+        let now = Date.now
+        let p = Project(name: "Northwind", now: now.addingTimeInterval(-7200)); mac.insert(p)
+        let none = try JSONEncoder().encode([AllowEntry]())
+        let closed = SessionRecord(projectID: p.id, firstTaskID: nil, plannedMin: 25, startedAt: now.addingTimeInterval(-3600), allowData: none)
+        closed.endedAt = now.addingTimeInterval(-2100); closed.endKind = "completed"
+        let open = SessionRecord(projectID: p.id, firstTaskID: nil, plannedMin: 50, startedAt: now.addingTimeInterval(-300), allowData: none)
+        open.eventsData = try JSONEncoder().encode([SessionEvent(.breakStart, at: now.addingTimeInterval(-60))])
+        mac.insert(closed); mac.insert(open); try mac.save()
+        try await SyncEngine(client: client, context: mac, defaults: defaults()).push(userID: uid)
+
+        let phone = SyncEngine(client: client, context: try ctx(), defaults: defaults(), pushesProfile: false)
+        let rows = try await phone.sessionTotals(since: now.addingTimeInterval(-7200))
+        #expect(rows.count == 2)
+        #expect(rows.first { $0.sessionID == closed.id }?.focusedSec == 1500)
+        #expect(rows.first { $0.sessionID == open.id }?.endedAt == nil)
+        let run = try #require(try await phone.runningSession())
+        #expect(run.id == open.id && run.plannedMin == 50 && run.onBreak)
+        try await client.auth.signOut()
+    }
 }

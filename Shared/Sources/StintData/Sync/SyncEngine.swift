@@ -242,4 +242,20 @@ public final class SyncEngine {
     public func rejectCommand(_ id: UUID, reason: String) async throws {
         try await client.from("session_command").update(["rejected_reason": reason]).eq("id", value: id).execute()
     }
+
+    // MARK: phone read model (sessions are Mac-owned: the phone reads them, never writes them)
+
+    public func sessionTotals(since: Date) async throws -> [SessionTotalsRow] {
+        try await client.from("session_totals").select("session_id,project_id,started_at,ended_at,focused_sec,break_sec")
+            .gte("started_at", value: Self.iso(since)).order("started_at", ascending: true).execute().value
+    }
+
+    public func runningSession() async throws -> RunningSession? {
+        let open: [SessionRow] = try await client.from("session").select().is("ended_at", value: nil)
+            .order("started_at", ascending: false).limit(1).execute().value
+        guard let s = open.first else { return nil }
+        let events: [SessionEventRow] = try await client.from("session_event").select().eq("session_id", value: s.id)
+            .order("at", ascending: true).execute().value
+        return RunningSession(row: s, events: events)
+    }
 }
