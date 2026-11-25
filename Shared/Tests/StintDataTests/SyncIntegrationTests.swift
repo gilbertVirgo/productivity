@@ -59,7 +59,9 @@ struct SyncIntegrationTests {
         a.insert(PointEvent(at: old, delta: 5, kind: "session_complete", refID: session.id, note: "Northwind"))
         try a.save()
 
-        let engineA = SyncEngine(client: client, context: a, defaults: defaults())
+        let defA = defaults(), defB = defaults()
+        defA.set("Alice", forKey: "displayName"); defA.set(Date.now.timeIntervalSince1970, forKey: "profileUpdatedAt")
+        let engineA = SyncEngine(client: client, context: a, defaults: defA)
         try await engineA.push(userID: uid)
         #expect(try await countOf("project") == 1)
         #expect(try await countOf("session_event") == 2)
@@ -72,8 +74,12 @@ struct SyncIntegrationTests {
 
         // Device B
         let b = try ctx()
-        let engineB = SyncEngine(client: client, context: b, defaults: defaults())
+        let engineB = SyncEngine(client: client, context: b, defaults: defB)
+        try await engineB.push(userID: uid) // fresh defaults: must not clobber A's profile
         try await engineB.pull()
+        let prof: [ProfileRow] = try await client.from("profile").select().execute().value
+        #expect(prof.first?.displayName == "Alice")
+        #expect(defB.string(forKey: "displayName") == "Alice")
         let bp = try b.fetch(FetchDescriptor<Project>())
         #expect(bp.count == 1 && bp[0].allowRules.count == 1 && bp[0].tasks.count == 1)
         #expect(try b.fetch(FetchDescriptor<PointEvent>()).count == 2)

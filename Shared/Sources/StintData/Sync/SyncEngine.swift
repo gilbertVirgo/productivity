@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Supabase
+import os
 
 /// Push local dirty rows / pull remote changes / subscribe to realtime. Conflict rule: last-write-wins on `updated_at`
 /// (server trigger rejects stale updates; `Mapping.apply` rejects stale remote rows).
@@ -47,9 +48,12 @@ public final class SyncEngine {
     }
 
     private func pushProfile(_ userID: UUID) async throws {
-        let key = "profileUpdatedAt"
-        if defaults.object(forKey: key) == nil { defaults.set(Date.now.timeIntervalSince1970, forKey: key) }
-        let row = ProfileRow(userID: userID, updatedAt: Date(timeIntervalSince1970: defaults.double(forKey: key)),
+        // Timezone always goes alone and without updated_at, so the stale-update trigger lets it through and
+        // close_periods has the real timezone before the user edits anything.
+        try await client.from("profile").update(["timezone": TimeZone.current.identifier]).eq("user_id", value: userID).execute()
+        // The full row goes only once the user has edited it (or pulled a server copy): never clobber with defaults.
+        guard let stamp = defaults.object(forKey: "profileUpdatedAt") as? Double else { return }
+        let row = ProfileRow(userID: userID, updatedAt: Date(timeIntervalSince1970: stamp),
                              timezone: TimeZone.current.identifier,
                              breakAllowanceMin: defaults.object(forKey: "breakAllowanceMin") as? Int ?? 60,
                              displayName: defaults.string(forKey: "displayName") ?? "")
@@ -72,7 +76,7 @@ public final class SyncEngine {
     ) async throws {
         let sent = try dirty(type).compactMap { m in build(m).map { (m, $0.0, $0.1) } }
         try await upsert(table, sent.map(\.1), ignoreDuplicates: ignoreDuplicates)
-        for (var m, _, at) in sent { m.syncedAt = at } // var: Syncable is not class-bound
+        for (var m, _, at) in sent { m.syncedAt = at } // `var` is required: Syncable is not class-bound, so the compiler rejects assigning through a `let`
         try context.save()
     }
 
@@ -106,34 +110,37 @@ public final class SyncEngine {
         func byID<M: PersistentModel>(_ type: M.Type, _ id: (M) -> UUID) throws -> [UUID: M] {
             Dictionary(try context.fetch(FetchDescriptor<M>()).map { (id($0), $0) }, uniquingKeysWith: { a, _ in a })
         }
+        // Watermarks are written only after the save succeeds, so a failed pull is retried in full.
+        var marks: [(String, Date)] = []
         func advance(_ table: String, _ dates: [Date]) {
-            if let m = dates.max(), m > watermark(table) { defaults.set(m.timeIntervalSince1970, forKey: "sync.watermark.\(table)") }
+            if let m = dates.max(), m > watermark(table) { marks.append((table, m)) }
         }
+        let dead = Set(try context.fetch(FetchDescriptor<Tombstone>()).map(\.rowID))
 
         var projects = try byID(Project.self, \.id)
         let prs: [ProjectRow] = try await query("project", column: "server_updated_at").execute().value
-        for r in prs {
+        for r in prs where !dead.contains(r.id) {
             if let p = projects[r.id] { _ = Mapping.apply(r, to: p) } else { projects[r.id] = Mapping.insert(r, in: context) }
         }
         advance("project", prs.compactMap(\.serverUpdatedAt))
 
         var rules = try byID(AllowRule.self, \.id)
         let ars: [ProjectAllowRow] = try await query("project_allow", column: "server_updated_at").execute().value
-        for r in ars {
+        for r in ars where !dead.contains(r.id) {
             if let a = rules[r.id] { _ = Mapping.apply(r, to: a) } else if let a = Mapping.insert(r, in: context) { rules[r.id] = a }
         }
         advance("project_allow", ars.compactMap(\.serverUpdatedAt))
 
         var tasks = try byID(TaskItem.self, \.id)
         let trs: [TaskRow] = try await query("task", column: "server_updated_at").execute().value
-        for r in trs {
+        for r in trs where !dead.contains(r.id) {
             if let t = tasks[r.id] { _ = Mapping.apply(r, to: t) } else if let t = Mapping.insert(r, in: context) { tasks[r.id] = t }
         }
         advance("task", trs.compactMap(\.serverUpdatedAt))
 
         var treats = try byID(Treat.self, \.id)
         let tr: [TreatRow] = try await query("treat", column: "server_updated_at").execute().value
-        for r in tr {
+        for r in tr where !dead.contains(r.id) {
             if let t = treats[r.id] { _ = Mapping.apply(r, to: t) } else { treats[r.id] = Mapping.insert(r, in: context) }
         }
         advance("treat", tr.compactMap(\.serverUpdatedAt))
@@ -154,7 +161,17 @@ public final class SyncEngine {
         for r in grs where goals[r.id] == nil { _ = Mapping.insert(r, in: context) }
         advance("goal_result", grs.map(\.createdAt))
 
+        let profiles: [ProfileRow] = try await client.from("profile").select().limit(1).execute().value
         try context.save()
+        for (t, d) in marks { defaults.set(d.timeIntervalSince1970, forKey: "sync.watermark.\(t)") }
+        if let p = profiles.first {
+            let local = defaults.object(forKey: "profileUpdatedAt") as? Double
+            if local == nil || p.updatedAt.timeIntervalSince1970 > local! {
+                defaults.set(p.displayName, forKey: "displayName")
+                defaults.set(p.breakAllowanceMin, forKey: "breakAllowanceMin")
+                defaults.set(p.updatedAt.timeIntervalSince1970, forKey: "profileUpdatedAt")
+            }
+        }
     }
 
     // MARK: realtime
@@ -166,7 +183,8 @@ public final class SyncEngine {
         let streams = tables.map { ch.postgresChange(AnyAction.self, schema: "public", table: $0) }
         listeners = streams.map { s in Task { @MainActor in for await _ in s { onChange() } } }
         channel = ch
-        try? await ch.subscribeWithError()
+        do { try await ch.subscribeWithError() }
+        catch { Logger(subsystem: "dev.stint.mac", category: "sync").error("realtime subscribe failed: \(error.localizedDescription, privacy: .public)") }
     }
 
     public func stopRealtime() async {
