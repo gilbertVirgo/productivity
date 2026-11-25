@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: dev.stint
   deploymentTarget:
     macOS: "14.0"
+    iOS: "17.2"
 packages:
   Core:
     path: Shared
@@ -16,11 +17,16 @@ settings:
     STINT_SUPABASE_URL: "http:/$()/127.0.0.1:54321"
     STINT_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
     CURRENT_PROJECT_VERSION: "1"
+  configs:
+    Release:
+      # Production values go here once the hosted project exists. Empty = "Sync not configured", never 127.0.0.1.
+      STINT_SUPABASE_URL: ""
+      STINT_SUPABASE_ANON_KEY: ""
 targets:
   StintMac:
     type: application
     platform: macOS
-    sources: [Mac]
+    sources: [Mac, SharedUI]
     dependencies:
       - package: Core
       - package: Core
@@ -65,4 +71,47 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Manual
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Stint.app/Contents/MacOS/Stint"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+  StintPhone:
+    type: application
+    platform: iOS
+    sources: [iOS, SharedUI]
+    dependencies:
+      - package: Core
+      - package: Core
+        product: StintData
+      - package: Supabase
+        product: Supabase
+    info:
+      path: iOS/Info.plist
+      properties:
+        CFBundleDisplayName: Stint
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        StintSupabaseURL: $(STINT_SUPABASE_URL)
+        StintSupabaseAnonKey: $(STINT_SUPABASE_ANON_KEY)
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_NAME: Stint
+        PRODUCT_BUNDLE_IDENTIFIER: dev.stint.ios
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+    scheme:
+      testTargets: [StintPhoneTests]
+  StintPhoneTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [iOSTests]
+    dependencies:
+      - target: StintPhone
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.stint.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Stint.app/Stint"
         BUNDLE_LOADER: "$(TEST_HOST)"

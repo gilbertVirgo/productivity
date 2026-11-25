@@ -20,6 +20,15 @@ xcodebuild -project Stint.xcodeproj -scheme StintMac -destination 'platform=macO
 
 The app lands in `DerivedData/Build/Products/Debug/Stint.app` when you pass `-derivedDataPath DerivedData` (gitignored); otherwise it goes to Xcode's default DerivedData.
 
+## iPhone
+
+```
+xcodegen generate && xcodebuild -project Stint.xcodeproj -scheme StintPhone -destination 'platform=iOS Simulator,name=iPhone 18 Pro' -derivedDataPath DerivedData build
+xcrun simctl install booted DerivedData/Build/Products/Debug-iphonesimulator/Stint.app
+```
+
+The simulator reaches the local stack at 127.0.0.1. Sign in with an email code from Mailpit (http://127.0.0.1:54324). Release builds need the production Supabase values in `project.yml` (empty means "Sync not configured").
+
 ## Tests
 
 Logic: `cd Shared && swift test`. App: the same `xcodebuild` command with `test` instead of `build`.

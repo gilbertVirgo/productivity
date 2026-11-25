@@ -1,4 +1,3 @@
-import StintData
 import SwiftUI
 
 extension Color {
@@ -19,3 +18,11 @@ enum ProjectColor {
     // teal, amber, purple, blue, rose
     static let all = ["#0F7B6C", "#B7671F", "#6E56CF", "#2F6FB5", "#B5476A"]
 }
+
+func remainingText(_ sec: Int) -> String {
+    let s = max(0, sec)
+    return String(format: "%d:%02d", s / 60, s % 60)
+}
+
+/// "3.5" (hours, one decimal) from seconds.
+func hours(_ sec: Int) -> String { String(format: "%.1f", Double(sec) / 3600) }

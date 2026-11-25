@@ -8,11 +8,6 @@ struct Nudge: Equatable { var bundleID: String; var host: String?; var startedAt
 
 struct TodayStats: Equatable { var focusedSec: Int; var breakLeftSec: Int; var points: Int }
 
-func remainingText(_ sec: Int) -> String {
-    let s = max(0, sec)
-    return String(format: "%d:%02d", s / 60, s % 60)
-}
-
 @MainActor @Observable
 final class AppState {
     private static let log = Logger(subsystem: "dev.stint.mac", category: "app")

@@ -31,13 +31,7 @@ final class SyncCoordinator {
 
     init(app: AppState, context: ModelContext) {
         self.app = app; self.ctx = context
-        let info = Bundle.main.infoDictionary
-        func value(_ k: String) -> String? { (info?[k] as? String).flatMap { $0.isEmpty || $0.hasPrefix("$(") ? nil : $0 } }
-        if let u = value("StintSupabaseURL").flatMap(URL.init(string:)), let key = value("StintSupabaseAnonKey") {
-            let c = SupabaseClient(
-                supabaseURL: u, supabaseKey: key,
-                options: .init(db: .init(encoder: SyncCoding.encoder, decoder: SyncCoding.decoder),
-                               auth: .init(emitLocalSessionAsInitialSession: true)))
+        if let c = SyncConfig.client(info: Bundle.main.infoDictionary) {
             client = c; engine = SyncEngine(client: c, context: context); configured = true
         } else {
             client = nil; engine = nil; configured = false
