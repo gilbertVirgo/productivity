@@ -84,6 +84,8 @@ import Core
     var sleepSec: Int
     var eventsData: Data
     var allowData: Data
+    /// Entries added mid-session (JSON `[AllowEntry]`), index-paired with `allowReasons`. `allowData` is the start snapshot.
+    var allowAddedData: Data = Data("[]".utf8)
     var allowReasons: [String] = []
 
     init(projectID: UUID, firstTaskID: UUID?, plannedMin: Int, startedAt: Date, allowData: Data) {

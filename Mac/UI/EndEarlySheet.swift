@@ -28,5 +28,6 @@ struct EndEarlySheet: View {
             }
             .padding(20).frame(width: 280)
         }
+        .onAppear { start = Date(); reason = "" }
     }
 }

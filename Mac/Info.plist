@@ -22,6 +22,8 @@
 	<string>1</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
+	<key>LSMultipleInstancesProhibited</key>
+	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Stint reads the website in your current Safari or Chrome tab to tell whether you're on task. It never reads page content.</string>
 </dict>

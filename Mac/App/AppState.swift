@@ -83,9 +83,9 @@ final class AppState {
         }
         let m = ActivityMonitor(
             onFront: { [weak self] id, host in self?.run { $0.observe(bundleID: id, host: host, at: .now) } },
-            onIdle: { [weak self] v in self?.run { $0.setIdle(v, at: .now) } },
+            onIdle: { [weak self] v, at in self?.run { $0.setIdle(v, at: at) } },
             onSleep: { [weak self] v in self?.run { $0.setAsleep(v, at: .now) } },
-            onAutomationDenied: { [weak self] in self?.automationDenied = true })
+            onAutomationDenied: { [weak self] denied in self?.automationDenied = denied })
         monitor = m
         m.start()
         m.reportCurrent()
@@ -102,9 +102,11 @@ final class AppState {
     }
 
     func allowCurrent(reason: String) {
-        guard var e = engine, let (_, signals) = e.allowCurrent(at: .now) else { return }
+        guard var e = engine else { return }
+        let before = e.allowAdded.count
+        guard let (_, signals) = e.allowCurrent(at: .now) else { return }
         engine = e
-        record?.allowReasons.append(reason)
+        if e.allowAdded.count > before { record?.allowReasons.append(reason) }
         handle(signals)
         checkpoint()
     }
@@ -119,6 +121,9 @@ final class AppState {
         let signals = f(&e)
         engine = e
         handle(signals)
+        if let n = nudge, let f = e.front, f.bundleID != n.bundleID || f.host != n.host, e.isOffTask {
+            nudge = Nudge(bundleID: f.bundleID, host: f.host, startedAt: n.startedAt)
+        }
         if stateChange || !signals.isEmpty { checkpoint() }
     }
 
@@ -142,7 +147,7 @@ final class AppState {
 
     private func checkpoint() {
         guard let e = engine, let r = record else { return }
-        do { try Ledger.checkpoint(ctx, record: r, events: e.events, allow: e.allowlist.entries.sorted { $0.value < $1.value }, at: Date()) }
+        do { try Ledger.checkpoint(ctx, record: r, events: e.events, allowAdded: e.allowAdded, at: Date()) }
         catch { Self.log.error("checkpoint: \(error)") }
     }
 

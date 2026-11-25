@@ -4,17 +4,17 @@ import Core
 @MainActor
 final class ActivityMonitor {
     private let onFront: (String, String?) -> Void
-    private let onIdle: (Bool) -> Void
+    private let onIdle: (Bool, Date) -> Void
     private let onSleep: (Bool) -> Void
-    private let onAutomationDenied: () -> Void
+    private let onAutomationDenied: (Bool) -> Void
     private var tokens: [NSObjectProtocol] = []
     private var timer: Timer?
     private var lastFront: String?
     private var lastHost: String?
     private var idle = false
 
-    init(onFront: @escaping (String, String?) -> Void, onIdle: @escaping (Bool) -> Void,
-         onSleep: @escaping (Bool) -> Void, onAutomationDenied: @escaping () -> Void) {
+    init(onFront: @escaping (String, String?) -> Void, onIdle: @escaping (Bool, Date) -> Void,
+         onSleep: @escaping (Bool) -> Void, onAutomationDenied: @escaping (Bool) -> Void) {
         self.onFront = onFront; self.onIdle = onIdle; self.onSleep = onSleep; self.onAutomationDenied = onAutomationDenied
     }
 
@@ -54,15 +54,15 @@ final class ActivityMonitor {
         }
         let secs = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!)
         let nowIdle = secs >= 300
-        if nowIdle != idle { idle = nowIdle; onIdle(nowIdle) }
+        if nowIdle != idle { idle = nowIdle; onIdle(nowIdle, nowIdle ? Date().addingTimeInterval(-secs) : Date()) }
     }
 
     private func report(_ id: String, force: Bool) {
         var host: String?
         if Browsers.supported.contains(id.lowercased()) {
             switch BrowserHost.host(for: id) {
-            case .success(let h): host = h
-            case .failure: onAutomationDenied()
+            case .success(let h): host = h; onAutomationDenied(false)
+            case .failure: onAutomationDenied(true)
             }
         }
         guard force || id != lastFront || host != lastHost else { return }

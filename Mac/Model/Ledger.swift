@@ -20,10 +20,10 @@ enum Ledger {
         return r
     }
 
-    static func checkpoint(_ ctx: ModelContext, record: SessionRecord, events: [SessionEvent], allow: [AllowEntry], at: Date) throws {
-        let e = try enc(events), a = try enc(allow)
+    static func checkpoint(_ ctx: ModelContext, record: SessionRecord, events: [SessionEvent], allowAdded: [AllowEntry], at: Date) throws {
+        let e = try enc(events), a = try enc(allowAdded)
         record.eventsData = e
-        record.allowData = a
+        record.allowAddedData = a
         record.updatedAt = at
         try ctx.save()
     }
@@ -31,7 +31,7 @@ enum Ledger {
     static func close(_ ctx: ModelContext, record: SessionRecord, result: SessionResult, endedAt: Date, earlyReason: String?) throws {
         guard record.endedAt == nil else { return }
         let events = try enc(result.events)
-        let allow = try enc((dec(record.allowData) as [AllowEntry]) + result.allowAdded)
+        let added = try enc(result.allowAdded)
         let t = result.totals
         record.focusedSec = t.focusedSec; record.offtaskSec = t.offtaskSec; record.breakSec = t.breakSec
         record.idleSec = t.idleSec; record.sleepSec = t.sleepSec
@@ -39,7 +39,7 @@ enum Ledger {
         record.endKind = result.completed ? "completed" : "early"
         record.earlyReason = earlyReason
         record.eventsData = events
-        record.allowData = allow
+        record.allowAddedData = added
         record.updatedAt = endedAt
         let note = projectName(ctx, record.projectID)
         for l in result.points {
@@ -60,7 +60,7 @@ enum Ledger {
             let t = sessionTotals(start: r.startedAt, end: end, events: events)
             let result = SessionResult(totals: t, completed: false,
                                        points: sessionPoints(totals: t, completed: false, breakOverSec: 0),
-                                       events: events, allowAdded: [])
+                                       events: events, allowAdded: dec(r.allowAddedData))
             do { try close(ctx, record: r, result: result, endedAt: end, earlyReason: "Stint quit during session") }
             catch { log.error("recoverOrphans failed for \(r.id): \(error)") }
         }

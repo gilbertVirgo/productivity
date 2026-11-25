@@ -55,7 +55,7 @@ import Core
         let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
         try Ledger.checkpoint(ctx, record: rec,
                           events: [SessionEvent(.offtaskStart, at: t0 + 600), SessionEvent(.offtaskEnd, at: t0 + 900)],
-                          allow: [], at: t0 + 1200)
+                          allowAdded: [], at: t0 + 1200)
         try Ledger.recoverOrphans(ctx, now: t0 + 99999)
         #expect(rec.endKind == "early")
         #expect(rec.earlyReason == "Stint quit during session")
@@ -65,6 +65,36 @@ import Core
         let pts = try ctx.fetch(FetchDescriptor<PointEvent>(sortBy: [SortDescriptor(\.delta, order: .reverse)]))
         #expect(pts.map(\.delta) == [15, -10])
         #expect(pts.map(\.kind) == ["focus", "offtask"])
+    }
+
+    @Test func allowAddedKeptSeparateFromSnapshotAndPairedWithReasons() throws {
+        let ctx = try makeCtx()
+        let p = project(ctx)
+        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let base = AllowEntry(.app, "com.figma.desktop"), added = AllowEntry(.domain, "docs.example.com")
+        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [base])
+        let snapshot = rec.allowData
+        rec.allowReasons.append("needed docs")
+        try Ledger.checkpoint(ctx, record: rec, events: [], allowAdded: [added], at: t0 + 100)
+        let r = SessionResult(totals: SessionTotals(focusedSec: 100), completed: false, points: [], events: [], allowAdded: [added])
+        try Ledger.close(ctx, record: rec, result: r, endedAt: t0 + 100, earlyReason: "x")
+        #expect(rec.allowData == snapshot)
+        let got = try JSONDecoder().decode([AllowEntry].self, from: rec.allowAddedData)
+        #expect(got == [added])
+        #expect(rec.allowReasons.count == got.count)
+    }
+
+    @Test func recoveryPreservesAllowAdded() throws {
+        let ctx = try makeCtx()
+        let p = project(ctx)
+        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let added = AllowEntry(.app, "com.spotify.client")
+        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
+        rec.allowReasons.append("focus music")
+        try Ledger.checkpoint(ctx, record: rec, events: [], allowAdded: [added], at: t0 + 100)
+        try Ledger.recoverOrphans(ctx, now: t0 + 999)
+        #expect(try JSONDecoder().decode([AllowEntry].self, from: rec.allowAddedData) == [added])
+        #expect(rec.allowReasons == ["focus music"])
     }
 
     @Test func summariesOnlyClosedSince() throws {

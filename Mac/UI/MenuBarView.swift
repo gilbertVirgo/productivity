@@ -20,6 +20,7 @@ struct MenuBarView: View {
             Divider()
             Button("Open Stint") { NSApp.activate(); openWindow(id: "main") }.buttonStyle(.plain)
             Button("Quit") { NSApplication.shared.terminate(nil) }.buttonStyle(.plain)
+                .disabled(app.isRunning).help(app.isRunning ? "End the session first" : "")
         }
         .padding(14).frame(width: 300)
         .onChange(of: app.isRunning) { _, running in if !running { endSheet = false } }
