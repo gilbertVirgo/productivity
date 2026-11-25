@@ -7,7 +7,7 @@ public enum LedgerError: Error { case insufficientPoints }
 
 @MainActor
 public enum Ledger {
-    private static let log = Logger(subsystem: "dev.stint.mac", category: "ledger")
+    private static let log = Logger(subsystem: "dev.stint", category: "ledger")
     private static func enc<T: Encodable>(_ v: T) throws -> Data { try JSONEncoder().encode(v) }
     private static func dec<T: Decodable>(_ d: Data) -> [T] { (try? JSONDecoder().decode([T].self, from: d)) ?? [] }
 

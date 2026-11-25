@@ -27,4 +27,42 @@ import Foundation
         #expect(SessionCommand.parse(row("end_early_request")) == nil)
         #expect(SessionCommand.parse(row("dance")) == nil)
     }
+
+    @Test func wireRoundTrips() {
+        let cmds: [SessionCommand] = [
+            .start(projectID: UUID(), plannedMin: 50, firstTaskID: UUID()),
+            .start(projectID: UUID(), plannedMin: 25, firstTaskID: nil),
+            .takeBreak, .resume, .endEarly(reason: "Client call"),
+        ]
+        for c in cmds {
+            let w = c.wire
+            #expect(SessionCommand.parse(row(w.kind, w.payload)) == c)
+        }
+    }
+
+    @MainActor @Test func outcomeAcceptedWhenRowGone() async {
+        var polls = 0
+        let pending = row("break", [:])
+        let o = await awaitCommandOutcome(sleep: {}, poll: { polls += 1; return polls < 3 ? pending : nil })
+        #expect(o == .accepted && polls == 3)
+    }
+
+    @MainActor @Test func outcomeRejectedCarriesReason() async {
+        var r = row("break", [:]); r.rejectedReason = "No session is running on your Mac."
+        #expect(await awaitCommandOutcome(sleep: {}, poll: { r }) == .rejected("No session is running on your Mac."))
+    }
+
+    @MainActor @Test func outcomeUnreachableAfterTenPolls() async {
+        var polls = 0
+        let pending = row("break", [:])
+        #expect(await awaitCommandOutcome(sleep: {}, poll: { polls += 1; return pending }) == .unreachable)
+        #expect(polls == 10)
+    }
+
+    @MainActor @Test func pollErrorsCountAsPending() async {
+        struct Offline: Error {}
+        var polls = 0
+        let o = await awaitCommandOutcome(sleep: {}, poll: { polls += 1; if polls == 1 { throw Offline() }; return nil })
+        #expect(o == .accepted && polls == 2)
+    }
 }

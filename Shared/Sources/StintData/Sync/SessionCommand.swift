@@ -23,3 +23,35 @@ public enum SessionCommand: Equatable, Sendable {
         }
     }
 }
+
+public extension SessionCommand {
+    /// Wire form for a `session_command` row; `parse` is its inverse.
+    var wire: (kind: String, payload: [String: String]) {
+        switch self {
+        case let .start(projectID, plannedMin, firstTaskID):
+            var p = ["project_id": projectID.uuidString, "planned_min": String(plannedMin)]
+            if let firstTaskID { p["first_task_id"] = firstTaskID.uuidString }
+            return ("start", p)
+        case .takeBreak: return ("break", [:])
+        case .resume: return ("resume", [:])
+        case let .endEarly(reason): return ("end_early_request", ["reason": reason])
+        }
+    }
+}
+
+public enum CommandOutcome: Equatable, Sendable { case accepted, rejected(String), unreachable }
+
+/// Spec §6.3: polls the sent row until the Mac deletes it (accepted) or marks it rejected; gives up after
+/// `attempts` polls (10 × 1 s). A poll that throws (network) counts as still pending.
+@MainActor
+public func awaitCommandOutcome(attempts: Int = 10, sleep: () async -> Void,
+                                poll: () async throws -> SessionCommandRow?) async -> CommandOutcome {
+    for _ in 0..<attempts {
+        await sleep()
+        do {
+            guard let row = try await poll() else { return .accepted }
+            if let reason = row.rejectedReason { return .rejected(reason) }
+        } catch { continue }
+    }
+    return .unreachable
+}

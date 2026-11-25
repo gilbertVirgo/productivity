@@ -162,21 +162,31 @@ final class SyncCoordinator {
                 for row in try await engine.pendingCommands() {
                     guard gen == generation else { return }
                     let age = Date.now.timeIntervalSince(row.createdAt)
-                    if age <= 10 {
-                        if let cmd = SessionCommand.parse(row) {
-                            if !Self.perform(cmd, on: app), case .start = cmd {
-                                // The project may have been created on the phone moments ago: pull once and retry.
-                                await syncNow()
-                                // A pass already in flight only queues another; wait until the queued pass finishes.
-                                while syncing { try? await Task.sleep(for: .milliseconds(50)) }
-                                guard gen == generation else { return }
-                                _ = Self.perform(cmd, on: app)
-                            }
-                        } else { Self.log.error("unparseable command \(row.kind, privacy: .public)") }
-                    } else {
-                        Self.log.info("discarded stale command \(row.kind, privacy: .public), age \(Int(age))s")
+                    if row.rejectedReason != nil { // waiting for the phone to read it
+                        if age > 10 { try await engine.deleteCommand(row.id) }
+                        continue
                     }
-                    try await engine.deleteCommand(row.id) // deleting is the acknowledgement
+                    guard age <= 10 else {
+                        Self.log.info("discarded stale command \(row.kind, privacy: .public), age \(Int(age))s")
+                        try await engine.deleteCommand(row.id)
+                        continue
+                    }
+                    let cmd = SessionCommand.parse(row)
+                    var done = cmd.map { Self.perform($0, on: app) } ?? false
+                    if !done, let cmd, case .start = cmd {
+                        // The project may have been created on the phone moments ago: pull once and retry.
+                        await syncNow()
+                        // A pass already in flight only queues another; wait until the queued pass finishes.
+                        while syncing { try? await Task.sleep(for: .milliseconds(50)) }
+                        guard gen == generation else { return }
+                        done = Self.perform(cmd, on: app)
+                    }
+                    if done {
+                        try await engine.deleteCommand(row.id) // deleting is the acknowledgement
+                    } else {
+                        if cmd == nil { Self.log.error("unparseable command \(row.kind, privacy: .public)") }
+                        try await engine.rejectCommand(row.id, reason: Self.rejectionReason(cmd, isRunning: app.isRunning))
+                    }
                 }
             } catch { Self.log.error("commands: \(error.localizedDescription, privacy: .public)") }
         } while rerunCommands && gen == generation
@@ -196,6 +206,15 @@ final class SyncCoordinator {
     }
 
     /// True when the command was acted on.
+    /// What the phone shows when the Mac can't act on a command.
+    static func rejectionReason(_ cmd: SessionCommand?, isRunning: Bool) -> String {
+        switch cmd {
+        case nil: "Your Mac couldn't read that request. Update Stint on both devices."
+        case .start: isRunning ? "A session is already running on your Mac." : "Your Mac doesn't have that project yet. Try again in a minute."
+        case .takeBreak, .resume, .endEarly: "No session is running on your Mac."
+        }
+    }
+
     static func perform(_ cmd: SessionCommand, on app: AppState) -> Bool {
         switch cmd {
         case let .start(projectID, plannedMin, firstTaskID):

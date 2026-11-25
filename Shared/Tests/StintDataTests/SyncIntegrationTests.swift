@@ -15,6 +15,18 @@ private final class MemoryStorage: AuthLocalStorage, @unchecked Sendable {
 
 private struct IDRow: Decodable { let id: UUID }
 
+@MainActor private func signedInClient() async throws -> (SupabaseClient, UUID) {
+    let env = ProcessInfo.processInfo.environment
+    let client = SupabaseClient(
+        supabaseURL: URL(string: env["STINT_SUPABASE_URL"]!)!, supabaseKey: env["STINT_SUPABASE_ANON_KEY"]!,
+        options: .init(db: .init(encoder: SyncCoding.encoder, decoder: SyncCoding.decoder),
+                       auth: .init(storage: MemoryStorage(), emitLocalSessionAsInitialSession: true)))
+    let chars = Array("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+    let password = String((0..<24).map { _ in chars.randomElement()! })
+    let auth = try await client.auth.signUp(email: "sync-\(UUID())@test.local", password: password)
+    return (client, auth.user.id)
+}
+
 @MainActor @Suite(.enabled(if: ProcessInfo.processInfo.environment["STINT_SUPABASE_URL"] != nil))
 struct SyncIntegrationTests {
     func ctx() throws -> ModelContext {
@@ -118,6 +130,26 @@ struct SyncIntegrationTests {
         SyncEngine.pageSize = 2; defer { SyncEngine.pageSize = saved }
         try await SyncEngine(client: client, context: b, defaults: defaults()).pull()
         #expect(try b.fetch(FetchDescriptor<PointEvent>()).count == 5)
+        try await client.auth.signOut()
+    }
+
+    @Test func phoneCommandsAndNoProfilePush() async throws {
+        let (client, uid) = try await signedInClient()
+        let d = defaults()
+        d.set("Phone", forKey: "displayName"); d.set(Date.now.timeIntervalSince1970, forKey: "profileUpdatedAt")
+        let phone = SyncEngine(client: client, context: try ctx(), defaults: d, pushesProfile: false)
+        try await phone.push(userID: uid)
+        let prof: [ProfileRow] = try await client.from("profile").select().execute().value
+        #expect(prof.first?.displayName == "")
+
+        let id = try await phone.sendCommand(.endEarly(reason: "Client call"), userID: uid)
+        let sent = try #require(try await phone.command(id))
+        #expect(SessionCommand.parse(sent) == .endEarly(reason: "Client call"))
+        #expect(sent.rejectedReason == nil)
+        try await phone.rejectCommand(id, reason: "No session is running on your Mac.")
+        #expect(try await phone.command(id)?.rejectedReason == "No session is running on your Mac.")
+        try await phone.deleteCommand(id)
+        #expect(try await phone.command(id) == nil)
         try await client.auth.signOut()
     }
 }

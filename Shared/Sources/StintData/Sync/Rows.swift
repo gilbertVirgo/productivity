@@ -184,5 +184,14 @@ public struct SessionCommandRow: Codable, Sendable, Equatable {
     public var id: UUID, userID: UUID, createdAt: Date
     public var kind: String
     public var payload: [String: String]
-    enum CodingKeys: String, CodingKey { case id, userID = "user_id", createdAt = "created_at", kind, payload }
+    public var rejectedReason: String? = nil
+    enum CodingKeys: String, CodingKey { case id, userID = "user_id", createdAt = "created_at", kind, payload, rejectedReason = "rejected_reason" }
+}
+
+/// Insert shape for a phone command. `created_at` is server-defaulted so the Mac ages commands by server time.
+public struct NewSessionCommandRow: Encodable, Sendable {
+    public var id: UUID, userID: UUID
+    public var kind: String
+    public var payload: [String: String]
+    enum CodingKeys: String, CodingKey { case id, userID = "user_id", kind, payload }
 }

@@ -10,6 +10,7 @@ public final class SyncEngine {
     private let client: SupabaseClient
     private let context: ModelContext
     private let defaults: UserDefaults
+    private let pushesProfile: Bool
     private var channel: RealtimeChannelV2?
     private var listeners: [Task<Void, Never>] = []
 
@@ -17,14 +18,15 @@ public final class SyncEngine {
     private static let lookback: TimeInterval = 300
     private static let editableTables = ["project", "project_allow", "task", "treat", "session"]
 
-    public init(client: SupabaseClient, context: ModelContext, defaults: UserDefaults = .standard) {
-        self.client = client; self.context = context; self.defaults = defaults
+    public init(client: SupabaseClient, context: ModelContext, defaults: UserDefaults = .standard,
+                pushesProfile: Bool = true) {
+        self.client = client; self.context = context; self.defaults = defaults; self.pushesProfile = pushesProfile
     }
 
     // MARK: push
 
     public func push(userID: UUID) async throws {
-        try await pushProfile(userID)
+        if pushesProfile { try await pushProfile(userID) }
         try await pushEditable("project", Project.self) { m in (Mapping.row(m, userID: userID), m.updatedAt) }
         try await pushEditable("project_allow", AllowRule.self) { m in Mapping.row(m, userID: userID).map { ($0, m.updatedAt) } }
         try await pushEditable("task", TaskItem.self) { m in Mapping.row(m, userID: userID).map { ($0, m.updatedAt) } }
@@ -202,7 +204,7 @@ public final class SyncEngine {
         }
         channel = ch
         do { try await ch.subscribeWithError() }
-        catch { Logger(subsystem: "dev.stint.mac", category: "sync").error("realtime subscribe failed: \(error.localizedDescription, privacy: .public)") }
+        catch { Logger(subsystem: "dev.stint", category: "sync").error("realtime subscribe failed: \(error.localizedDescription, privacy: .public)") }
     }
 
     public func stopRealtime() async {
@@ -220,5 +222,24 @@ public final class SyncEngine {
 
     public func deleteCommand(_ id: UUID) async throws {
         try await client.from("session_command").delete().eq("id", value: id).execute()
+    }
+
+    /// Phone side: insert a command. Returns its id for `command(_:)` polling.
+    public func sendCommand(_ cmd: SessionCommand, userID: UUID) async throws -> UUID {
+        let w = cmd.wire
+        let row = NewSessionCommandRow(id: UUID(), userID: userID, kind: w.kind, payload: w.payload)
+        try await client.from("session_command").insert(row, returning: .minimal).execute()
+        return row.id
+    }
+
+    /// nil once the Mac has deleted it (accepted).
+    public func command(_ id: UUID) async throws -> SessionCommandRow? {
+        let rows: [SessionCommandRow] = try await client.from("session_command").select().eq("id", value: id).execute().value
+        return rows.first
+    }
+
+    /// Mac side: leave the row for the phone to read instead of deleting it.
+    public func rejectCommand(_ id: UUID, reason: String) async throws {
+        try await client.from("session_command").update(["rejected_reason": reason]).eq("id", value: id).execute()
     }
 }

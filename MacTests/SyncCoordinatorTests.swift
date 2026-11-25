@@ -61,4 +61,12 @@ import StintData
         #expect(d.object(forKey: "sync.watermark.project") == nil && d.object(forKey: "profileUpdatedAt") == nil)
         #expect(try ctx.fetch(FetchDescriptor<Tombstone>()).isEmpty)
     }
+
+    @Test func rejectionReasons() {
+        let start = SessionCommand.start(projectID: UUID(), plannedMin: 25, firstTaskID: nil)
+        #expect(SyncCoordinator.rejectionReason(start, isRunning: true) == "A session is already running on your Mac.")
+        #expect(SyncCoordinator.rejectionReason(start, isRunning: false) == "Your Mac doesn't have that project yet. Try again in a minute.")
+        #expect(SyncCoordinator.rejectionReason(.takeBreak, isRunning: false) == "No session is running on your Mac.")
+        #expect(SyncCoordinator.rejectionReason(nil, isRunning: false) == "Your Mac couldn't read that request. Update Stint on both devices.")
+    }
 }
