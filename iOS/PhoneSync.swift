@@ -47,7 +47,8 @@ final class PhoneSync {
     // MARK: auth
 
     private func resume() async {
-        guard let client, let s = try? await client.auth.session else { return }
+        // No saved session: a start tapped before launch must not fire after some later manual sign-in.
+        guard let client, let s = try? await client.auth.session else { pendingStart = nil; return }
         signedIn(s.user)
         await setActive(true)
         await flushPendingStart()
@@ -62,7 +63,7 @@ final class PhoneSync {
         catch { lastError = error.localizedDescription }
     }
 
-    func cancelSignIn() { lastError = nil; state = .signedOut }
+    func cancelSignIn() { lastError = nil; state = .signedOut; pendingStart = nil }
 
     func verify(email: String, code: String) async {
         guard let client else { return }
