@@ -27,7 +27,7 @@ private struct IDRow: Decodable { let id: UUID }
     return (client, auth.user.id)
 }
 
-@MainActor @Suite(.enabled(if: ProcessInfo.processInfo.environment["STINT_SUPABASE_URL"] != nil))
+@MainActor @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["STINT_SUPABASE_URL"] != nil))
 struct SyncIntegrationTests {
     func ctx() throws -> ModelContext {
         ModelContext(try ModelContainer(for: Schema(StintSchema.models), configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
