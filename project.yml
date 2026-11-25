@@ -26,7 +26,10 @@ targets:
   StintMac:
     type: application
     platform: macOS
-    sources: [Mac, SharedUI]
+    sources:
+      - Mac
+      - path: SharedUI
+        excludes: [WeekBars.swift]
     dependencies:
       - package: Core
       - package: Core
