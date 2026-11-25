@@ -12,14 +12,7 @@ struct MenuBarLabel: View {
 struct MenuBarView: View {
     @Environment(AppState.self) private var app
     @Environment(\.openWindow) private var openWindow
-    @Query(filter: #Predicate<Project> { $0.archivedAt == nil }, sort: \Project.name) private var projects: [Project]
-    @State private var projectID: UUID?
-    @State private var plannedMin = 25
-    @State private var taskID: UUID?
     @State private var endSheet = false
-
-    private var selected: Project? { projects.first { $0.id == projectID } ?? projects.first }
-    private var openTasks: [TaskItem] { (selected?.tasks ?? []).filter { $0.doneAt == nil }.sorted { $0.sort < $1.sort } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -42,23 +35,7 @@ struct MenuBarView: View {
                                  : "Session ended · \(r.points >= 0 ? "+" : "")\(r.points) points").font(.callout)
             }
             Text("Start session").font(.headline)
-            if projects.isEmpty {
-                Text("No projects yet").foregroundStyle(.secondary)
-            } else {
-                Picker("Project", selection: Binding(get: { selected?.id }, set: { projectID = $0; taskID = nil })) {
-                    ForEach(projects) { Text($0.name).tag(Optional($0.id)) }
-                }
-                Picker("Length", selection: $plannedMin) {
-                    ForEach([25, 50, 90], id: \.self) { Text("\($0)").tag($0) }
-                }.pickerStyle(.segmented).labelsHidden()
-                Picker("First task", selection: $taskID) {
-                    Text("No task").tag(UUID?.none)
-                    ForEach(openTasks) { Text($0.title).tag(Optional($0.id)) }
-                }
-                Button("Start") {
-                    if let p = selected { app.start(project: p, plannedMin: plannedMin, firstTask: openTasks.first { $0.id == taskID }) }
-                }.buttonStyle(.borderedProminent).disabled(selected == nil)
-            }
+            StartSessionControls()
         }
     }
 
