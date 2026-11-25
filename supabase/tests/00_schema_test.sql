@@ -1,5 +1,5 @@
 begin;
-select plan(17);
+select plan(20);
 
 -- two users; the auth.users trigger creates their profiles
 insert into auth.users (id, email) values
@@ -51,6 +51,14 @@ select throws_ok(
 
 insert into public.share_link (friend_label) values ('Sam');
 select matches((select token from public.share_link), '^[A-Za-z0-9_-]{43}$', 'share token is 32 bytes base64url');
+
+-- server-side last-write-wins
+update public.project set name = 'Stale', updated_at = now() - interval '1 day' where id = '10000000-0000-0000-0000-000000000001';
+select is((select name from public.project where id = '10000000-0000-0000-0000-000000000001'), 'Northwind', 'stale update (older updated_at) is skipped');
+update public.project set name = 'Fresh', updated_at = now() + interval '1 day' where id = '10000000-0000-0000-0000-000000000001';
+select is((select name from public.project where id = '10000000-0000-0000-0000-000000000001'), 'Fresh', 'newer update is applied');
+delete from public.profile;
+select is((select count(*)::int from public.profile), 1, 'clients cannot delete their profile');
 
 -- act as B
 reset role;

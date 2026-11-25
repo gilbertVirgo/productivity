@@ -41,7 +41,9 @@ declare
 begin
   for pr in select user_id, timezone from profile loop
     tz := pr.timezone;
-    today := (p_now at time zone tz)::date;
+    -- 2 h grace: a day closes at 02:05 local, a week at Monday 02:05, so late-syncing sessions still count.
+    -- ponytail: sessions stretched past 2 h after midnight (e.g. by Mac sleep) still lose their day; widen if it bites.
+    today := ((p_now - interval '2 hours') at time zone tz)::date;
     for p in select * from project where user_id = pr.user_id and archived_at is null loop
       lower := greatest((p.created_at at time zone tz)::date, today - lookback);
 
@@ -52,8 +54,8 @@ begin
         t1 := (d + 1)::timestamp at time zone tz;
         if p.daily_hours_goal is not null then
           select coalesce(sum(st.focused_sec), 0) into secs
-            from session s join session_totals st on st.session_id = s.id
-           where s.project_id = p.id and s.ended_at is not null and s.started_at >= t0 and s.started_at < t1;
+            from session_totals st
+           where st.project_id = p.id and st.ended_at is not null and st.started_at >= t0 and st.started_at < t1;
           n := n + record_goal(p, 'day', d, 'hours', p.daily_hours_goal, round(secs / 3600.0, 2),
                                secs >= p.daily_hours_goal * 3600, p_now);
         end if;
@@ -71,8 +73,8 @@ begin
         t1 := (d + 7)::timestamp at time zone tz;
         if p.weekly_hours_goal is not null then
           select coalesce(sum(st.focused_sec), 0) into secs
-            from session s join session_totals st on st.session_id = s.id
-           where s.project_id = p.id and s.ended_at is not null and s.started_at >= t0 and s.started_at < t1;
+            from session_totals st
+           where st.project_id = p.id and st.ended_at is not null and st.started_at >= t0 and st.started_at < t1;
           n := n + record_goal(p, 'week', d, 'hours', p.weekly_hours_goal, round(secs / 3600.0, 2),
                                secs >= p.weekly_hours_goal * 3600, p_now);
         end if;

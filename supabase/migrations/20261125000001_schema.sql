@@ -190,7 +190,7 @@ create index on public.goal_result (user_id, period_start);
 do $$
 declare t text;
 begin
-  foreach t in array array['profile', 'project', 'project_allow', 'task', 'session', 'session_allow',
+  foreach t in array array['project', 'project_allow', 'task', 'session', 'session_allow',
                            'treat', 'share_link', 'device', 'session_command'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('create policy owner_all on public.%I for all to authenticated
@@ -205,8 +205,33 @@ begin
   end loop;
 end $$;
 
+-- profile: created by the signup trigger, never deleted by clients (cascades from auth.users)
+alter table public.profile enable row level security;
+create policy owner_select on public.profile for select to authenticated using (user_id = (select auth.uid()));
+create policy owner_insert on public.profile for insert to authenticated with check (user_id = (select auth.uid()));
+create policy owner_update on public.profile for update to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+
 alter table public.goal_result enable row level security;
 create policy owner_select on public.goal_result for select to authenticated using (user_id = (select auth.uid()));
+
+-- Server-side last-write-wins (§6.11): a stale client write (older updated_at) is silently skipped.
+-- Does not touch updated_at itself.
+create function public.reject_stale_update() returns trigger language plpgsql as $$
+begin
+  if new.updated_at < old.updated_at then return null; end if;
+  return new;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['profile', 'project', 'project_allow', 'task', 'session', 'session_allow',
+                           'treat', 'share_link', 'device'] loop
+    execute format('create trigger reject_stale before update on public.%I
+                    for each row execute function public.reject_stale_update()', t);
+  end loop;
+end $$;
 
 -- New auth user → profile row.
 create function public.handle_new_user() returns trigger

@@ -53,7 +53,8 @@ begin
 end $$;
 
 create view public.session_totals with (security_invoker = true) as
-select s.id as session_id, s.user_id, t.focused_sec, t.offtask_sec, t.break_sec, t.idle_sec, t.sleep_sec
+select s.id as session_id, s.user_id, t.focused_sec, t.offtask_sec, t.break_sec, t.idle_sec, t.sleep_sec,
+       s.project_id, s.started_at, s.ended_at
 from public.session s
 cross join lateral public.compute_session_totals(
   s.started_at,

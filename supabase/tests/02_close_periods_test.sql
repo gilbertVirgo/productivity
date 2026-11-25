@@ -1,5 +1,5 @@
 begin;
-select plan(14);
+select plan(22);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'a@test.local'),
@@ -67,6 +67,35 @@ select pg_temp.sess('00000000-0000-0000-0000-00000000000a', '10000000-0000-0000-
 select is(public.close_periods('2026-11-24 13:00+00'), 0, 'idempotent: nothing new to close');
 select is(pg_temp.res('10000000-0000-0000-0000-000000000001', 'day', '2026-11-17', 'hours'), '(0.50,f)',
   'closed period is not reopened by late data');
+
+-- 2 h grace: C (London, = UTC in winter) has a session 23:30 Fri 20 → 00:40 Sat 21 (70 min)
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000000000c', 'c@test.local');
+update public.profile set timezone = 'Europe/London' where user_id = '00000000-0000-0000-0000-00000000000c';
+insert into public.project (id, user_id, name, created_at, daily_hours_goal, daily_goal_days)
+values ('10000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-00000000000c', 'Late',
+        '2026-11-01', 1, '{1,2,3,4,5,6,7}');
+select pg_temp.sess('00000000-0000-0000-0000-00000000000c', '10000000-0000-0000-0000-000000000004', '2026-11-20 23:30+00', 70);
+
+select public.close_periods('2026-11-21 00:05+00');
+select is(pg_temp.res('10000000-0000-0000-0000-000000000004', 'day', '2026-11-20', 'hours'), null, 'Fri 20 still open at 00:05 Sat');
+select public.close_periods('2026-11-21 02:05+00');
+select is(pg_temp.res('10000000-0000-0000-0000-000000000004', 'day', '2026-11-20', 'hours'), '(1.17,t)', 'Fri 20 closes at 02:05 with 70 min (4200/3600)');
+
+-- DST: New York fell back Sun 1 Nov. 04:30 UTC Mon 2 = 23:30 EST Sun 1 → week of Mon 26 Oct (ends 05:00 UTC, not 04:00)
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000000000d', 'd@test.local');
+update public.profile set timezone = 'America/New_York' where user_id = '00000000-0000-0000-0000-00000000000d';
+insert into public.project (id, user_id, name, created_at, weekly_hours_goal)
+values ('10000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-00000000000d', 'Dst', '2026-10-01', 1);
+select pg_temp.sess('00000000-0000-0000-0000-00000000000d', '10000000-0000-0000-0000-000000000005', '2026-11-02 04:30+00', 60);
+select public.close_periods('2026-11-10 12:00+00');
+select is(pg_temp.res('10000000-0000-0000-0000-000000000005', 'week', '2026-10-26', 'hours'), '(1.00,t)', 'DST: Sun 23:30 EST belongs to the week of 26 Oct');
+select is(pg_temp.res('10000000-0000-0000-0000-000000000005', 'week', '2026-11-02', 'hours'), '(0.00,f)', 'DST: week of 2 Nov excludes it');
+
+-- close_periods / record_goal are not callable by clients
+select ok(not has_function_privilege('authenticated', 'public.close_periods(timestamptz)', 'execute'), 'authenticated cannot close_periods');
+select ok(not has_function_privilege('anon', 'public.close_periods(timestamptz)', 'execute'), 'anon cannot close_periods');
+select ok(not has_function_privilege('authenticated', 'public.record_goal(public.project, text, date, text, numeric, numeric, boolean, timestamptz)', 'execute'), 'authenticated cannot record_goal');
+select ok(not has_function_privilege('anon', 'public.record_goal(public.project, text, date, text, numeric, numeric, boolean, timestamptz)', 'execute'), 'anon cannot record_goal');
 
 select * from finish();
 rollback;
