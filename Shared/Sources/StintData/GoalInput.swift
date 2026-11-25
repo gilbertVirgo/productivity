@@ -24,7 +24,7 @@ public func tasksDone(_ doneDates: [Date?], in interval: DateInterval) -> Int {
 }
 
 public extension ModelContext {
-    public func saveLogged() {
+    func saveLogged() {
         do { try save() } catch { Logger(subsystem: "dev.stint.mac", category: "ui").error("save: \(error)") }
     }
 }
