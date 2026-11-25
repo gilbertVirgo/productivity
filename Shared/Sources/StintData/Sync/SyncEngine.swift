@@ -7,7 +7,7 @@ import os
 /// (server trigger rejects stale updates; `Mapping.apply` rejects stale remote rows).
 @MainActor
 public final class SyncEngine {
-    private let client: SupabaseClient
+    let client: SupabaseClient
     private let context: ModelContext
     private let defaults: UserDefaults
     private let pushesProfile: Bool
