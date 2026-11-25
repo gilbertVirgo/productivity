@@ -44,7 +44,9 @@ struct SessionCard: View {
     var body: some View {
         let project = projects.first { $0.id == running.projectID }
         let task = running.firstTaskID.flatMap { id in project?.tasks.first { $0.id == id } }
-        let stale = running.isStale(at: .now)
+        // Re-evaluated every 15 s: a Mac that quit sends nothing, so staleness must come from the clock, not a re-render.
+        TimelineView(.periodic(from: .now, by: 15)) { staleTick in
+        let stale = running.isStale(at: staleTick.date)
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Circle().fill(Color(hex: project?.colorHex ?? "#8E8E93")).frame(width: 10, height: 10)
@@ -64,6 +66,7 @@ struct SessionCard: View {
                 Button("End early…") { endSheet = true }.buttonStyle(.bordered)
             }
             .disabled(sync.waiting || stale)
+        }
         }
         .sheet(isPresented: $endSheet) {
             // Spec §6.11: the same 60 s cooldown + reason, on the phone, before the command is sent.
@@ -103,5 +106,8 @@ struct StartCard: View {
         }
         .onAppear { if projectID == nil { projectID = projects.first?.id } }
         .onChange(of: projectID) { taskID = nil }
+        .onChange(of: projects.map(\.id)) { _, ids in
+            if projectID == nil || !ids.contains(projectID!) { projectID = ids.first }
+        }
     }
 }
