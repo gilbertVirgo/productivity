@@ -79,7 +79,7 @@ final class SyncCoordinator {
         userID = nil
         await engine?.stopRealtime()
         try? await client?.auth.signOut()
-        while syncing || handling { await Task.yield() } // in-flight passes bail on the generation change
+        while syncing || handling { try? await Task.sleep(for: .milliseconds(50)) } // in-flight passes bail on the generation change
         if let ctx { try? Self.resetSyncState(ctx) }
         userID = nil; lastSync = nil; lastError = nil; state = .signedOut
     }
@@ -167,6 +167,9 @@ final class SyncCoordinator {
                             if !Self.perform(cmd, on: app), case .start = cmd {
                                 // The project may have been created on the phone moments ago: pull once and retry.
                                 await syncNow()
+                                // A pass already in flight only queues another; wait until the queued pass finishes.
+                                while syncing { try? await Task.sleep(for: .milliseconds(50)) }
+                                guard gen == generation else { return }
                                 _ = Self.perform(cmd, on: app)
                             }
                         } else { Self.log.error("unparseable command \(row.kind, privacy: .public)") }
