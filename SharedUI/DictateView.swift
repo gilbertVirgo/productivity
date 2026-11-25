@@ -11,13 +11,14 @@ struct DictateView: View {
     @Environment(\.modelContext) private var ctx
     @Query(filter: #Predicate<Project> { $0.archivedAt == nil }, sort: \Project.name) private var projects: [Project]
     @State private var speech = SpeechCapture()
-    @State private var drafts: [DraftTask]?
+    @State private var drafts: [DraftTask] = []
+    @State private var confirming = false
     @State private var working = false
     @State private var message: String?
 
     var body: some View {
         Group {
-            if let drafts { confirm(drafts) } else { capture }
+            if confirming { confirm(drafts) } else { capture }
         }
         .onDisappear { speech.stop() }
     }
@@ -64,10 +65,10 @@ struct DictateView: View {
             do {
                 let parsed = try await parse(text, projects)
                 let d = VoiceTasks.drafts(parsed, projectIDs: Set(projects.map(\.id)))
-                if d.isEmpty { drafts = VoiceTasks.fallback(text); message = "No separate tasks found. Edit the one below." }
-                else { drafts = d }
+                if d.isEmpty { drafts = VoiceTasks.fallback(text); confirming = true; message = "No separate tasks found. Edit the one below." }
+                else { drafts = d; confirming = true }
             } catch {
-                drafts = VoiceTasks.fallback(text)
+                drafts = VoiceTasks.fallback(text); confirming = true
                 message = "Couldn't sort this automatically. Edit the task below."
             }
         }
@@ -76,15 +77,14 @@ struct DictateView: View {
     // MARK: confirm
 
     private func confirm(_ current: [DraftTask]) -> some View {
-        let binding = Binding(get: { drafts ?? [] }, set: { drafts = $0 })
         let n = VoiceTasks.checkedCount(current)
         return VStack(spacing: 0) {
             if let message { Text(message).font(.footnote).foregroundStyle(Theme.warn).padding(.top) }
             List {
-                ForEach(binding) { $d in row($d) }
+                ForEach($drafts) { $d in row($d) }
             }
             HStack {
-                Button("Back") { drafts = nil; message = nil }
+                Button("Back") { confirming = false; message = nil }
                 Spacer()
                 Button(n == 1 ? "Add 1 task" : "Add \(n) tasks") { save(current) }
                     .buttonStyle(.borderedProminent)
@@ -121,7 +121,7 @@ struct DictateView: View {
     private func save(_ current: [DraftTask]) {
         do {
             let n = try VoiceSave.save(current, projects: projects, in: ctx)
-            drafts = nil; message = nil; speech.transcript = ""
+            confirming = false; message = nil; speech.transcript = ""
             onSaved(n)
         } catch { message = "Couldn't save: \(error.localizedDescription)" }
     }

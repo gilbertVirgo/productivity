@@ -13,9 +13,12 @@ final class SpeechCapture {
     @ObservationIgnored private let audio = AVAudioEngine()
     @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
     @ObservationIgnored private var task: SFSpeechRecognitionTask?
+    @ObservationIgnored private var take = 0
+    @ObservationIgnored private var starting = false
 
     func start() async {
-        guard mode != .recording else { return }
+        guard !starting, mode != .recording else { return }
+        starting = true; defer { starting = false }
         guard await Self.speechAllowed(), await Self.micAllowed() else {
             mode = .unavailable("Dictation is off for Stint. Type your tasks instead, or allow Microphone and Speech Recognition in Settings.")
             return
@@ -35,14 +38,20 @@ final class SpeechCapture {
         input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0), block: Self.tap(req))
         do { audio.prepare(); try audio.start() } catch {
             input.removeTap(onBus: 0)
+            req.endAudio()
+            #if os(iOS)
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            #endif
             mode = .unavailable("Couldn't use the microphone. Type your tasks instead.")
             return
         }
         let base = transcript.isEmpty ? "" : transcript + " " // keep what was there before this take
         request = req
         mode = .recording
+        take += 1
+        let myTake = take
         task = recognizer.recognitionTask(with: req, resultHandler: Self.handler { [weak self] text, done in
-            guard let self else { return }
+            guard let self, myTake == self.take else { return }
             if let text { self.transcript = base + text }
             if done { self.stop() }
         })
