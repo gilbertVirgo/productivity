@@ -36,6 +36,8 @@ public struct RunningSession: Sendable, Equatable {
     }
     public var onBreak: Bool { isOpen(.breakStart, .breakEnd) }
     public var offTask: Bool { isOpen(.offtaskStart, .offtaskEnd) }
+    /// Idle or asleep.
+    public var paused: Bool { isOpen(.idleStart, .idleEnd) || isOpen(.sleep, .wake) }
     /// No checkpoint for 2 min: the Mac quit, slept or lost network.
     public func isStale(at now: Date) -> Bool { now.timeIntervalSince(lastSeen) > 120 }
 }

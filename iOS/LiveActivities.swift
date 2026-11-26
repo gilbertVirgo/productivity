@@ -64,26 +64,26 @@ final class LiveActivities {
 
     /// Makes the activities match the session feed: one for the running session, none otherwise.
     /// `force` also ends young activities (sign-out).
-    func reconcile(running: RunningSession?, projectName: String?, taskTitle: String?, now: Date, force: Bool = false) async {
+    func reconcile(running: RunningSession?, project: Project?, now: Date, force: Bool = false) async {
         let all = Activity<StintActivityAttributes>.activities.filter { $0.activityState == .active || $0.activityState == .stale }
         for a in all { firstSeen[a.id] = firstSeen[a.id] ?? now }
-        let plan = Self.plan(existing: all.map { (id: $0.id, sessionID: $0.attributes.sessionID,
-                                                  young: now.timeIntervalSince(firstSeen[$0.id] ?? now) < Self.youngSec) },
-                             runningSessionID: running?.id.uuidString, force: force)
+        let plan = Self.plan(existing: all.map { (id: $0.id, young: now.timeIntervalSince(firstSeen[$0.id] ?? now) < Self.youngSec) },
+                             running: running != nil, force: force)
         for a in all where plan.end.contains(a.id) {
-            await Self.end(a.id, ActivityContent(state: .ended(taskTitle: a.content.state.taskTitle), staleDate: nil))
+            await Self.end(a.id, ActivityContent(state: .ended(projectName: a.content.state.projectName, colorHex: a.content.state.colorHex,
+                                                                 icon: a.content.state.icon, focusedSec: a.content.state.focusedSec), staleDate: nil))
             activityTokens[a.id] = nil; firstSeen[a.id] = nil
             if keptID == a.id { keptID = nil }
         }
         if let k = plan.keep { keptID = k }
         defer { selectToken() }
         guard let running else { return }
-        let state = LiveSessionState.make(remainingSec: running.remainingSec(at: now), onBreak: running.onBreak,
-                                          offTask: running.offTask, taskTitle: taskTitle, now: now)
+        let state = LiveSessionState.make(projectName: project?.name ?? "Stint", colorHex: project?.colorHex ?? "#8E8E93",
+                                          icon: project?.icon, focusedSec: running.totals(at: now).focusedSec,
+                                          onBreak: running.onBreak, offTask: running.offTask, paused: running.paused, now: now)
         if plan.start {
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-            let attrs = StintActivityAttributes(sessionID: running.id.uuidString, projectName: projectName ?? "Stint",
-                                                plannedMin: running.plannedMin)
+            let attrs = StintActivityAttributes(sessionID: running.id.uuidString)
             do {
                 let a = try Activity.request(attributes: attrs, content: ActivityContent(state: state, staleDate: nil), pushType: .token)
                 firstSeen[a.id] = now
@@ -105,13 +105,13 @@ final class LiveActivities {
         await Activity<StintActivityAttributes>.activities.first { $0.id == id }?.update(c)
     }
 
-    /// Pure: keep the first activity for the running session; end every other one except young ones (unless `force`);
-    /// start one if none is kept. A young activity may have been push-started before its session row reached this phone.
-    nonisolated static func plan(existing: [(id: String, sessionID: String, young: Bool)], runningSessionID: String?,
+    /// Pure: one activity per tracking run. Keep the first; end every other one except young ones (unless `force`);
+    /// start one if tracking and none is kept. A young activity may have been push-started before its row arrived.
+    nonisolated static func plan(existing: [(id: String, young: Bool)], running: Bool,
                                  force: Bool = false) -> (start: Bool, end: Set<String>, keep: String?) {
-        let keep = runningSessionID.flatMap { r in existing.first { $0.sessionID == r }?.id }
+        let keep = running ? existing.first?.id : nil
         let end = Set(existing.filter { $0.id != keep && (force || !$0.young) }.map(\.id))
-        return (runningSessionID != nil && keep == nil, end, keep)
+        return (running && keep == nil, end, keep)
     }
 }
 

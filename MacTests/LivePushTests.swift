@@ -16,15 +16,15 @@ import StintData
         app.start(project: p, plannedMin: 25, firstTask: nil)
         let first = try #require(got.first)
         #expect(first.event == .start)
-        #expect(first.attributes == LiveSessionInfo(sessionID: first.sessionID.uuidString, projectName: "Northwind", plannedMin: 25))
+        #expect(first.attributes == LiveSessionInfo(sessionID: first.sessionID.uuidString))
 
         app.takeBreak()
         let onBreak = try #require(got.last)
-        #expect(onBreak.event == .update && onBreak.contentState.status == .onBreak && onBreak.contentState.endsAt == nil)
+        #expect(onBreak.event == .update && onBreak.contentState.status == .onBreak && onBreak.contentState.countFrom == nil)
 
         app.resume()
         let back = try #require(got.last)
-        #expect(back.event == .update && back.contentState.status != .onBreak && back.contentState.endsAt != nil)
+        #expect(back.event == .update && back.contentState.status != .onBreak && back.contentState.countFrom != nil)
 
         app.endEarly(reason: "test")
         let end = try #require(got.last)

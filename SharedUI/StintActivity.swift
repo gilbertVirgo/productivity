@@ -7,7 +7,5 @@ import Core
 struct StintActivityAttributes: ActivityAttributes {
     typealias ContentState = LiveSessionState
     var sessionID: String
-    var projectName: String
-    var plannedMin: Int
 }
 #endif

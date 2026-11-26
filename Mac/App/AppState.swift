@@ -40,9 +40,9 @@ final class AppState {
     @ObservationIgnored private var lastLive: LiveSessionState?
 
     private func liveState(at now: Date) -> LiveSessionState? {
-        guard let e = engine else { return nil }
-        return .make(remainingSec: e.remainingSec(at: now), onBreak: e.onBreak, offTask: e.isOffTask,
-                     taskTitle: firstTask?.title, now: now)
+        guard let e = engine, let p = project else { return nil }
+        return .make(projectName: p.name, colorHex: p.colorHex, icon: p.icon, focusedSec: e.totals(at: now).focusedSec,
+                     onBreak: e.onBreak, offTask: e.isOffTask, paused: e.idle || e.asleep, now: now)
     }
 
     init(context: ModelContext) {
@@ -91,7 +91,7 @@ final class AppState {
         if let r = record, let s = liveState(at: started) {
             lastLive = s
             onLive?(LivePush(event: .start, sessionID: r.id,
-                             attributes: LiveSessionInfo(sessionID: r.id.uuidString, projectName: project.name, plannedMin: plannedMin),
+                             attributes: LiveSessionInfo(sessionID: r.id.uuidString),
                              contentState: s))
         }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -152,10 +152,7 @@ final class AppState {
             nudge = Nudge(bundleID: f.bundleID, host: f.host, startedAt: n.startedAt)
         }
         if stateChange || !signals.isEmpty { checkpoint() }
-        // Asleep pauses the countdown while the clock runs, so endsAt drifts every tick; status/task changes still go out.
-        // Idle counts toward the planned length, so endsAt holds steady while idle.
-        if let s = liveState(at: .now), let r = record, let last = lastLive, s.differs(from: last),
-           !(e.asleep && s.status == last.status && s.taskTitle == last.taskTitle) {
+        if let s = liveState(at: .now), let r = record, let last = lastLive, s.differs(from: last) {
             lastLive = s
             onLive?(LivePush(event: .update, sessionID: r.id, attributes: nil, contentState: s))
         }
@@ -202,7 +199,9 @@ final class AppState {
         let result = e.finish(at: end, early: early, breakUsedEarlierTodaySec: used, allowanceSec: allowanceSec)
         do { try Ledger.close(ctx, record: r, result: result, endedAt: end, earlyReason: reason) }
         catch { Self.log.error("close: \(error)") }
-        onLive?(LivePush(event: .end, sessionID: r.id, attributes: nil, contentState: .ended(taskTitle: firstTask?.title)))
+        onLive?(LivePush(event: .end, sessionID: r.id, attributes: nil,
+                         contentState: .ended(projectName: project?.name ?? "", colorHex: project?.colorHex ?? "#8E8E93",
+                                              icon: project?.icon, focusedSec: result.totals.focusedSec)))
         lastLive = nil
         timer?.invalidate(); timer = nil
         monitor?.stop(); monitor = nil

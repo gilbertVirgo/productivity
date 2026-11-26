@@ -9,8 +9,8 @@ const req = (body: unknown, role = "authenticated", method = "POST") =>
     headers: { Authorization: `Bearer ${jwt(role)}`, apikey: "anon-key", "Content-Type": "application/json" },
     body: method === "POST" ? JSON.stringify(body) : undefined,
   });
-const state = { status: "focused", endsAt: 1800000600, remainingSec: 600 };
-const attrs = { sessionID: S, projectName: "Northwind", plannedMin: 50 };
+const state = { status: "focused", projectName: "Northwind", colorHex: "#000000", countFrom: 1800000000, focusedSec: 600 };
+const attrs = { sessionID: S };
 
 function deps(devices: Device[], status = 200) {
   const sent: { token: string; payload: any }[] = [];
@@ -39,18 +39,18 @@ Deno.test("start goes to push-to-start tokens with attributes and an alert", asy
   assertEquals(aps["content-state"], state);
   assertEquals(aps["attributes-type"], "StintActivityAttributes");
   assertEquals(aps.attributes, attrs);
-  assertEquals(aps.alert, { title: "Northwind", body: "Session started on your Mac" });
+  assertEquals(aps.alert, { title: "Northwind", body: "Tracking on your Mac" });
   assertEquals(typeof aps.timestamp, "number");
 });
 
-Deno.test("update goes only to this session's activity tokens, ids compared case-insensitively", async () => {
+Deno.test("update goes to every device's activity token", async () => {
   const { d, sent } = deps([
     { push_to_start_token: "aa11", activity_token: "bb22", activity_session_id: S },
-    { push_to_start_token: null, activity_token: "cc33", activity_session_id: "22222222-2222-2222-2222-222222222222" },
+    { push_to_start_token: null, activity_token: "cc33", activity_session_id: "22222222-2222-2222-2222-222222222222" }, // other stretch id
   ]);
   const r = await handle(req({ event: "update", session_id: S.toUpperCase(), content_state: state }), d);
-  assertEquals(await r.json(), { sent: 1, failed: 0 });
-  assertEquals(sent.map((s) => s.token), ["bb22"]);
+  assertEquals(await r.json(), { sent: 2, failed: 0 });
+  assertEquals(sent.map((s) => s.token), ["bb22", "cc33"]);
   assertEquals(sent[0].payload.aps.event, "update");
   assertEquals(sent[0].payload.aps.attributes, undefined);
   assertEquals(sent[0].payload.aps.alert, undefined);

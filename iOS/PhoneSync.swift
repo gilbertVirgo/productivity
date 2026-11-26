@@ -137,7 +137,7 @@ final class PhoneSync {
         while syncing { try? await Task.sleep(for: .milliseconds(50)) }
         do { try Self.wipe(ctx, defaults: defaults) } catch { Self.log.error("wipe: \(error.localizedDescription, privacy: .public)") }
         running = nil; snapshot = nil; lastSync = nil; lastError = nil; commandStatus = nil; pendingStart = nil
-        await live.reconcile(running: nil, projectName: nil, taskTitle: nil, now: .now, force: true) // the last account's activity ends
+        await live.reconcile(running: nil, project: nil, now: .now, force: true) // the last account's activity ends
         live.forgetActivity()
         publish()
         state = .signedOut
@@ -196,8 +196,7 @@ final class PhoneSync {
         if let pid = run?.projectID {
             project = (try? ctx.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == pid })))?.first
         }
-        let task = run?.firstTaskID.flatMap { id in project?.tasks.first { $0.id == id } }
-        await live.reconcile(running: run, projectName: project?.name, taskTitle: task?.title, now: .now)
+        await live.reconcile(running: run, project: project, now: .now)
     }
 
     func parseTasks(_ transcript: String, projects: [Project]) async throws -> [ParsedTask] {

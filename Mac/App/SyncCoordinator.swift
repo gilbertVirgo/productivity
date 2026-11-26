@@ -93,7 +93,7 @@ final class SyncCoordinator {
         }
         userID = user.id
         for id in app.recoveredSessionIDs {
-            sendLive(LivePush(event: .end, sessionID: id, attributes: nil, contentState: .ended(taskTitle: nil)))
+            sendLive(LivePush(event: .end, sessionID: id, attributes: nil, contentState: .ended(projectName: "", colorHex: "#8E8E93", icon: nil, focusedSec: 0)))
         }
         app.recoveredSessionIDs = []
         timer?.invalidate()

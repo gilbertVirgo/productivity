@@ -34,18 +34,17 @@ export async function handle(req: Request, deps: Deps | null): Promise<Response>
     console.error("push-activity devices:", e instanceof Error ? e.message : e);
     return json(502, { error: "devices_failed" });
   }
-  const sid = session_id.toLowerCase(); // Swift sends upper-case UUIDs; Postgres returns lower-case
-  const tokens = [...new Set(devices.map((d) =>
-    event === "start" ? d.push_to_start_token : d.activity_session_id?.toLowerCase() === sid ? d.activity_token : null
-  ).filter((t): t is string => typeof t === "string" && HEX.test(t)))];
+  // One tracking run at a time: updates and ends go to whatever activity each phone has (spec 2026-11-26 §7.3).
+  const tokens = [...new Set(devices.map((d) => event === "start" ? d.push_to_start_token : d.activity_token)
+    .filter((t): t is string => typeof t === "string" && HEX.test(t)))];
 
   const now = Math.floor(Date.now() / 1000);
   const aps: Record<string, unknown> = { timestamp: now, event, "content-state": content_state };
   if (event === "start") {
-    const a = attributes as Record<string, unknown>;
     aps["attributes-type"] = "StintActivityAttributes";
-    aps.attributes = a;
-    aps.alert = { title: typeof a.projectName === "string" ? a.projectName : "Stint", body: "Session started on your Mac" };
+    aps.attributes = attributes;
+    const cs = content_state as Record<string, unknown>;
+    aps.alert = { title: typeof cs.projectName === "string" ? cs.projectName : "Stint", body: "Tracking on your Mac" };
   }
   if (event === "end") aps["dismissal-date"] = now + 300;
 

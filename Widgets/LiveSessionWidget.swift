@@ -6,10 +6,10 @@ import Core
 struct LiveSessionWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: StintActivityAttributes.self) { ctx in
-            LockScreen(attrs: ctx.attributes, state: ctx.state).padding()
+            LockScreen(state: ctx.state).padding()
         } dynamicIsland: { ctx in
             DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) { Text(ctx.attributes.projectName).font(.headline).lineLimit(1) }
+                DynamicIslandExpandedRegion(.leading) { Text(ctx.state.projectName).font(.headline).lineLimit(1) }
                 DynamicIslandExpandedRegion(.trailing) { Clock(state: ctx.state).font(.title3) }
                 DynamicIslandExpandedRegion(.bottom) { Status(state: ctx.state) }
             } compactLeading: {
@@ -24,13 +24,14 @@ struct LiveSessionWidget: Widget {
 }
 
 private struct LockScreen: View {
-    let attrs: StintActivityAttributes
     let state: LiveSessionState
     var body: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(attrs.projectName).font(.headline).lineLimit(1)
-                if let task = state.taskTitle { Text(task).font(.subheadline).foregroundStyle(.secondary).lineLimit(1) }
+                HStack(spacing: 6) {
+                    Image(systemName: state.icon ?? "circle.fill").foregroundStyle(Color(hex: state.colorHex))
+                    Text(state.projectName).font(.headline).lineLimit(1)
+                }
                 Status(state: state)
             }
             Spacer()
@@ -39,20 +40,17 @@ private struct LockScreen: View {
     }
 }
 
-/// Counts down without pushes. Paused (break) or past the end: a static remaining time.
+/// Counts up from the stretch start without pushes. Stopped (break, paused, off task): a still focused-time number.
 private struct Clock: View {
     let state: LiveSessionState
     var body: some View {
         Group {
-            let now = Date.now // one read: `end` passing between two reads would trap the range
-            if let end = state.endsDate, end > now {
-                Text(timerInterval: now...end, countsDown: true)
+            if let from = state.countFromDate {
+                Text(from, style: .timer)
             } else if state.status == .ended {
                 Image(systemName: "checkmark.circle.fill")
-            } else if state.endsDate != nil {
-                Text(remainingText(0)) // endsAt passed; remainingSec is stale from the last push
             } else {
-                Text(remainingText(state.remainingSec))
+                Text(remainingText(state.focusedSec))
             }
         }
         .monospacedDigit()
@@ -72,7 +70,8 @@ private func label(_ s: LiveSessionState.Status) -> String {
     case .focused: "Focused"
     case .offTask: "Off task"
     case .onBreak: "On break"
-    case .ended: "Session ended"
+    case .paused: "Paused"
+    case .ended: "Stopped"
     }
 }
 
@@ -81,6 +80,7 @@ private func symbol(_ s: LiveSessionState.Status) -> String {
     case .focused: "timer"
     case .offTask: "exclamationmark.circle"
     case .onBreak: "cup.and.saucer"
+    case .paused: "pause.circle"
     case .ended: "checkmark.circle"
     }
 }
