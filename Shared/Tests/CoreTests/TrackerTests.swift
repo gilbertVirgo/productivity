@@ -120,4 +120,14 @@ import Testing
         #expect(r.count == 1 && r[0].end == .stopped && r[0].endedAt == midnight)
         #expect(t.currentID == b.id && t.engine?.startedAt == midnight + 8 * 3600)
     }
+
+    @Test func anObservationAfterMidnightDoesNotBackdateIntoTheNewDay() {
+        var t = Tracker(calendar: utc)
+        let late = ISO8601DateFormatter().date(from: "2026-11-26T23:50:00Z")!
+        let midnight = ISO8601DateFormatter().date(from: "2026-11-27T00:00:00Z")!
+        _ = t.switchTo(a, at: late)
+        _ = t.observe(bundleID: "com.spotify.client", host: nil, at: midnight + 300)
+        #expect(t.engine?.startedAt == midnight)
+        #expect(!(t.engine?.events.contains { $0.type == .offtaskStart && $0.at == midnight } ?? false))
+    }
 }

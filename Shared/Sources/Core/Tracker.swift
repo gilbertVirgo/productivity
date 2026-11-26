@@ -89,8 +89,8 @@ public struct Tracker: Sendable {
     }
 
     public mutating func observe(bundleID: String, host: String?, at now: Date) -> [Output] {
-        front = FrontApp(bundleID: bundleID, host: host)
         let split = splitAtMidnight(before: now)
+        front = FrontApp(bundleID: bundleID, host: host)
         guard var e = engine, project?.offMac == false else { return split }
         let out = Self.map(e.observe(bundleID: bundleID, host: host, at: now))
         engine = e
@@ -115,12 +115,12 @@ public struct Tracker: Sendable {
         return split + out
     }
 
+    /// Does not split at midnight; `tick` does.
     /// "It's work: allow": allows what's in front for the rest of this stretch. The caller makes it permanent.
     public mutating func allowCurrent(at now: Date) -> (AllowEntry, [Output])? {
-        let split = splitAtMidnight(before: now)
         guard var e = engine, let (entry, signals) = e.allowCurrent(at: now) else { return nil }
         engine = e
-        return (entry, split + Self.map(signals))
+        return (entry, Self.map(signals))
     }
 
     /// Clock tick: the midnight split (§5.2), then the engine's grace timers.
