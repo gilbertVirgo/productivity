@@ -17,12 +17,14 @@ settings:
     STINT_TEAM_ID: "63Q7M3DVRK"
     STINT_SUPABASE_URL: "http:/$()/127.0.0.1:54321"
     STINT_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0"
+    STINT_SHARE_URL: "http:/$()/127.0.0.1:8787/" # share-site served locally (README "Share page")
     CURRENT_PROJECT_VERSION: "1"
   configs:
     Release:
       # Production values go here once the hosted project exists. Empty = "Sync not configured", never 127.0.0.1.
       STINT_SUPABASE_URL: ""
       STINT_SUPABASE_ANON_KEY: ""
+      STINT_SHARE_URL: "https:/$()/gilbertvirgo.github.io/productivity/"
 targets:
   StintMac:
     type: application
@@ -45,6 +47,7 @@ targets:
         LSMultipleInstancesProhibited: true
         StintSupabaseURL: $(STINT_SUPABASE_URL)
         StintSupabaseAnonKey: $(STINT_SUPABASE_ANON_KEY)
+        StintShareURL: $(STINT_SHARE_URL)
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         LSApplicationCategoryType: public.app-category.productivity

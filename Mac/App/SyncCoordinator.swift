@@ -130,6 +130,33 @@ final class SyncCoordinator {
         return try await engine.parseTasks(transcript: transcript, projects: projects)
     }
 
+    // MARK: friends
+
+    private var shareBaseURL: String { Self.shareBase(info: Bundle.main.infoDictionary) }
+
+    /// `StintShareURL` from Info.plist; "" when missing or an unexpanded `$(…)`.
+    static func shareBase(info: [String: Any]?) -> String {
+        guard let s = info?["StintShareURL"] as? String, !s.hasPrefix("$(") else { return "" }
+        return s
+    }
+
+    func shareURL(_ link: ShareLinkRow) -> URL? { link.url(base: shareBaseURL) }
+
+    func shareLinks() async throws -> [ShareLinkRow] {
+        guard let engine, userID != nil else { throw NotSignedIn() }
+        return try await engine.shareLinks()
+    }
+
+    func createShareLink(label: String) async throws -> ShareLinkRow {
+        guard let engine, userID != nil else { throw NotSignedIn() }
+        return try await engine.createShareLink(label: label.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    func revokeShareLink(_ link: ShareLinkRow) async throws {
+        guard let engine, userID != nil else { throw NotSignedIn() }
+        try await engine.revokeShareLink(id: link.id)
+    }
+
     func syncSoon() {
         guard userID != nil else { return }
         debounce?.cancel()
