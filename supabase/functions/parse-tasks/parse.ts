@@ -1,3 +1,4 @@
+import { role } from "../_shared/auth.ts";
 export const MAX_TRANSCRIPT = 4000; // Unicode scalars; the apps count the same way
 export type Project = { id: string; name: string };
 export type ParsedTask = { title: string; project_id: string | null; estimate_min: number | null; estimate_guessed: boolean };
@@ -5,15 +6,6 @@ export type Caller = (transcript: string, projects: Project[]) => Promise<unknow
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-
-/** The gateway has already verified the JWT; only signed-in users may spend Claude credit. */
-function role(req: Request): string | null {
-  const token = req.headers.get("Authorization")?.replace(/^Bearer /, "") ?? "";
-  try {
-    const b64 = token.split(".")[1].replaceAll("-", "+").replaceAll("_", "/");
-    return JSON.parse(atob(b64 + "=".repeat((4 - b64.length % 4) % 4))).role ?? null;
-  } catch { return null; }
-}
 
 /** Keeps well-formed tasks: non-empty title, known project or null, whole-minute estimate 1–1440 or null. */
 export function clean(raw: unknown, projects: Project[]): ParsedTask[] {

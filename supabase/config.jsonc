@@ -471,9 +471,10 @@
   },
 
   "functions": {
-    // role() in parse.ts trusts the JWT payload only because the gateway verifies the signature.
-    // Never set this to false.
+    // role() in _shared/auth.ts trusts the JWT payload only because the gateway verifies the signature.
+    // Never set these to false.
     "parse-tasks": { "verify_jwt": true },
+    "push-activity": { "verify_jwt": true },
   },
 
   "analytics": {
