@@ -6,31 +6,36 @@ import StintData
 struct TodayView: View {
     @Environment(PhoneSync.self) private var sync
     @Query(filter: #Predicate<Project> { $0.archivedAt == nil }, sort: \Project.name) private var projects: [Project]
-    @Query(filter: #Predicate<TaskItem> { $0.doneAt == nil }) private var openTasks: [TaskItem]
     @State private var account = false
+    @State private var desk = false
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
                     if let running = sync.running { SessionCard(running: running, projects: projects) } else { StartCard(projects: projects) }
+                    Button { desk = true } label: { Label("Desk mode", systemImage: "square.grid.2x2") }
                     if let s = sync.commandStatus { Text(s).font(.footnote).foregroundStyle(.secondary) }
                 }
-                Section("This week") {
-                    let lines = sync.snapshot?.lines ?? []
+                let lines = sync.snapshot?.lines ?? []
+                Section("Today") {
                     if lines.isEmpty { Text("Projects you add on your Mac show up here.").foregroundStyle(.secondary) }
-                    else { WeekBars(lines: lines) }
+                    ForEach(lines) { l in
+                        HStack {
+                            Circle().fill(Color(hex: l.colorHex)).frame(width: 10, height: 10)
+                            Text(l.name)
+                            Spacer()
+                            Text(hoursMinutes(l.todayFocusedSec)).monospacedDigit()
+                        }
+                    }
                 }
-                Section("Up next") {
-                    let next = upNext(openTasks, limit: 5)
-                    if next.isEmpty { Text("No open tasks.").foregroundStyle(.secondary) }
-                    ForEach(next) { TaskLine(task: $0) }
-                }
+                if !lines.isEmpty { Section("This week") { WeekBars(lines: lines) } }
             }
             .navigationTitle("Today")
             .refreshable { await sync.refresh() }
             .toolbar { Button("Account", systemImage: "person.crop.circle") { account = true } }
             .sheet(isPresented: $account) { NavigationStack { AccountView() } }
+            .fullScreenCover(isPresented: $desk) { DeskView() }
         }
     }
 }

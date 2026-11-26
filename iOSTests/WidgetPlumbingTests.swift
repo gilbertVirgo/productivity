@@ -6,12 +6,11 @@ import StintData
 @testable import Stint
 
 @Suite struct WidgetPlumbingTests {
-    @Test func startLinkRoundTrips() {
-        let id = UUID()
-        #expect(StartLink.parse(StartLink.url(projectID: id)) == id)
-        #expect(StartLink.parse(URL(string: "stint://today")!) == nil)
-        #expect(StartLink.parse(URL(string: "https://start?project=\(id)")!) == nil)
-        #expect(StartLink.parse(URL(string: "stint://start?project=nope")!) == nil)
+    @Test func deskLinkMatches() {
+        #expect(DeskLink.matches(DeskLink.url))
+        #expect(DeskLink.url.absoluteString == "stint://desk")
+        #expect(!DeskLink.matches(URL(string: "stint://start?project=\(UUID())")!))
+        #expect(!DeskLink.matches(URL(string: "https://desk")!))
     }
 
     @Test func snapshotFileRoundTrips() throws {
@@ -24,14 +23,5 @@ import StintData
 
     @Test func appGroupAvailable() {
         #expect(SnapshotStore.defaultURL != nil)
-    }
-
-    /// Cold launch: the URL can arrive before sign-in resumes, so the start waits instead of being dropped.
-    @MainActor @Test func startBeforeSignInStaysPending() throws {
-        let c = try ModelContainer(for: Schema(StintSchema.models), configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        let s = PhoneSync(context: c.mainContext, defaults: UserDefaults(suiteName: "phone-\(UUID())")!, info: [:])
-        let id = UUID()
-        s.openStart(id)
-        #expect(s.pendingStart == id)
     }
 }

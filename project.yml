@@ -32,7 +32,7 @@ targets:
     sources:
       - Mac
       - path: SharedUI
-        excludes: [WeekBars.swift, SnapshotStore.swift, StartLink.swift, StintActivity.swift]
+        excludes: [WeekBars.swift, SnapshotStore.swift, DeskLink.swift, StintActivity.swift]
     dependencies:
       - package: Core
       - package: Core
@@ -148,7 +148,7 @@ targets:
       - SharedUI/Theme.swift
       - SharedUI/WeekBars.swift
       - SharedUI/SnapshotStore.swift
-      - SharedUI/StartLink.swift
+      - SharedUI/DeskLink.swift
       - SharedUI/StintActivity.swift
     dependencies:
       - package: Core

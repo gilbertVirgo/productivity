@@ -22,8 +22,6 @@ final class PhoneSync {
     /// "Waiting for your Mac…" while a command is pending; afterwards the rejection or "Mac not reachable".
     var commandStatus: String?
     var waiting = false
-    /// A `stint://start` that arrived before sign-in finished resuming; sent once signed in.
-    var pendingStart: UUID?
     let configured: Bool
     let cal = PeriodCalendar(timeZone: .current)
     @ObservationIgnored let live = LiveActivities()
@@ -52,13 +50,11 @@ final class PhoneSync {
     // MARK: auth
 
     private func resume() async {
-        // No saved session: a start tapped before launch must not fire after some later manual sign-in.
         // `session` throws offline with an expired token; the stored session still says who is signed in, and the next refresh retries.
         guard let client, let user = (try? await client.auth.session)?.user ?? client.auth.currentSession?.user
-        else { pendingStart = nil; return }
+        else { return }
         signedIn(user)
         await setActive(true)
-        await flushPendingStart()
     }
 
     private func signedIn(_ user: User) {
@@ -107,12 +103,11 @@ final class PhoneSync {
             let s = try await client.auth.signInWithIdToken(credentials: .init(provider: .apple, idToken: token, nonce: nonce))
             signedIn(s.user)
             await setActive(true)
-            await flushPendingStart()
-        } catch let e as ASAuthorizationError where e.code == .canceled { pendingStart = nil
+            } catch let e as ASAuthorizationError where e.code == .canceled {
         } catch { lastError = error.localizedDescription }
     }
 
-    func cancelSignIn() { lastError = nil; state = .signedOut; pendingStart = nil }
+    func cancelSignIn() { lastError = nil; state = .signedOut }
 
     func verify(email: String, code: String) async {
         guard let client else { return }
@@ -121,8 +116,7 @@ final class PhoneSync {
             let r = try await client.auth.verifyOTP(email: email, token: code, type: .email)
             signedIn(r.user)
             await setActive(true)
-            await flushPendingStart()
-        } catch { lastError = error.localizedDescription }
+            } catch { lastError = error.localizedDescription }
     }
 
     func signOut() async {
@@ -136,7 +130,7 @@ final class PhoneSync {
         try? await client?.auth.signOut()
         while syncing { try? await Task.sleep(for: .milliseconds(50)) }
         do { try Self.wipe(ctx, defaults: defaults) } catch { Self.log.error("wipe: \(error.localizedDescription, privacy: .public)") }
-        running = nil; snapshot = nil; lastSync = nil; lastError = nil; commandStatus = nil; pendingStart = nil
+        running = nil; snapshot = nil; lastSync = nil; lastError = nil; commandStatus = nil
         await live.reconcile(running: nil, project: nil, now: .now, force: true) // the last account's activity ends
         live.forgetActivity()
         publish()
@@ -270,17 +264,6 @@ final class PhoneSync {
     }
 
     // MARK: commands (spec §6.3)
-
-    /// The Start widget's link. Signed out (or still resuming) it waits for sign-in rather than being dropped.
-    func openStart(_ id: UUID) {
-        if userID == nil { pendingStart = id } else { Task { await send(.switchTo(projectID: id)) } }
-    }
-
-    private func flushPendingStart() async {
-        guard let id = pendingStart else { return }
-        pendingStart = nil
-        await send(.switchTo(projectID: id))
-    }
 
     func send(_ cmd: SessionCommand) async {
         guard let engine, let userID else { return }

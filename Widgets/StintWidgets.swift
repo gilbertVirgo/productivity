@@ -69,25 +69,18 @@ struct TodayWidget: Widget {
 struct StartWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "start", provider: Provider()) { e in
-            Group {
-                if let s = e.snapshot, let id = s.startProjectID, let l = s.lines.first(where: { $0.id == id }) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Furthest behind").font(.caption).foregroundStyle(.secondary)
-                        Text(l.name).font(.headline).lineLimit(2)
-                        Spacer(minLength: 0)
-                        Label("Switch", systemImage: "arrow.left.arrow.right").font(.caption.bold())
-                            .foregroundStyle(Color(hex: l.colorHex))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .widgetURL(StartLink.url(projectID: id))
-                } else if e.snapshot != nil {
-                    Text("Daily goals done").font(.headline)
-                } else { OpenStint() }
+            VStack(alignment: .leading, spacing: 4) {
+                Image(systemName: "square.grid.2x2.fill").font(.title2)
+                Spacer(minLength: 0)
+                Text("Desk mode").font(.headline)
+                Text("Tap a project to switch on your Mac").font(.caption).foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .widgetURL(DeskLink.url)
             .containerBackground(.fill.tertiary, for: .widget)
         }
-        .configurationDisplayName("Start")
-        .description("Starts a 50 min Mac session on the project furthest behind today.")
+        .configurationDisplayName("Desk mode")
+        .description("Opens big project tiles for switching on your Mac.")
         .supportedFamilies([.systemSmall])
     }
 }
