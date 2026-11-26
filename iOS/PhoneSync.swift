@@ -135,6 +135,8 @@ final class PhoneSync {
         while syncing { try? await Task.sleep(for: .milliseconds(50)) }
         do { try Self.wipe(ctx, defaults: defaults) } catch { Self.log.error("wipe: \(error.localizedDescription, privacy: .public)") }
         running = nil; snapshot = nil; lastSync = nil; lastError = nil; commandStatus = nil; pendingStart = nil
+        await live.reconcile(running: nil, projectName: nil, taskTitle: nil, now: .now) // the last account's activity ends
+        live.forgetActivity()
         publish()
         state = .signedOut
     }
@@ -146,7 +148,7 @@ final class PhoneSync {
         for t in StintSchema.models { try clear(t) }
         try ctx.save()
         for k in defaults.dictionaryRepresentation().keys where k.hasPrefix("sync.watermark.") { defaults.removeObject(forKey: k) }
-        for k in ["profileUpdatedAt", "displayName", "breakAllowanceMin"] { defaults.removeObject(forKey: k) }
+        for k in ["profileUpdatedAt", "displayName", "breakAllowanceMin", deviceIDKey] { defaults.removeObject(forKey: k) }
     }
 
     // MARK: sync

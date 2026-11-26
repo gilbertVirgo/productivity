@@ -11,6 +11,8 @@ final class LiveActivities {
     struct Tokens: Equatable { var pushToStart: String?; var activity: String?; var activitySessionID: UUID? }
     private(set) var tokens = Tokens()
     var onTokens: ((Tokens) -> Void)?
+    /// Sign-out: the next account must not upload this activity's token. A new device id is minted for it anyway.
+    func forgetActivity() { tokens.activity = nil; tokens.activitySessionID = nil }
     private var observing = false
     private var watched: Set<String> = []
 

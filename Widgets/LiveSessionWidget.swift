@@ -44,8 +44,9 @@ private struct Clock: View {
     let state: LiveSessionState
     var body: some View {
         Group {
-            if let end = state.endsDate, end > .now {
-                Text(timerInterval: Date.now...end, countsDown: true)
+            let now = Date.now // one read: `end` passing between two reads would trap the range
+            if let end = state.endsDate, end > now {
+                Text(timerInterval: now...end, countsDown: true)
             } else if state.status == .ended {
                 Image(systemName: "checkmark.circle.fill")
             } else {

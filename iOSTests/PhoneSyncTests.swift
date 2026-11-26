@@ -34,11 +34,13 @@ import StintData
         c.insert(PointEvent(at: .now, delta: 5, kind: "focus", refID: nil, note: ""))
         try c.save()
         d.set(1.0, forKey: "sync.watermark.project"); d.set(1.0, forKey: "profileUpdatedAt")
+        d.set(UUID().uuidString, forKey: PhoneSync.deviceIDKey) // the next account gets its own device row
         try PhoneSync.wipe(c, defaults: d)
         #expect(try c.fetchCount(FetchDescriptor<Project>()) == 0)
         #expect(try c.fetchCount(FetchDescriptor<TaskItem>()) == 0)
         #expect(try c.fetchCount(FetchDescriptor<PointEvent>()) == 0)
         #expect(d.object(forKey: "sync.watermark.project") == nil && d.object(forKey: "profileUpdatedAt") == nil)
+        #expect(d.object(forKey: PhoneSync.deviceIDKey) == nil)
     }
 
     @Test func applyCountsLiveSessionAndPoints() throws {
