@@ -37,7 +37,7 @@ final class AppState {
     var hotkeyUnavailable = false
 
     @ObservationIgnored private let nudgePanel = NudgePanelController { AnyView(NudgeView().environment($0)) }
-    @ObservationIgnored private let suggestPanel = NudgePanelController { AnyView(SuggestView().environment($0)) }
+    @ObservationIgnored private let suggestPanel = NudgePanelController(key: false) { AnyView(SuggestView().environment($0)) }
     @ObservationIgnored private var suggester = SwitchSuggester()
     var suggestion: SwitchSuggester.Suggestion? { didSet { updateSuggestPanel() } }
     var undo: SwitchUndo? { didSet { updateSuggestPanel() } }
@@ -174,7 +174,7 @@ final class AppState {
                 do { record = try Ledger.openStretch(ctx, projectID: id, startedAt: at) }
                 catch { Self.log.error("openStretch: \(error)") }
                 project = findProject(id)
-                suggester.reset(); suggestion = nil
+                suggester.reset(); suggestion = nil; undo = nil
             case let .offTaskStarted(bundleID, host):
                 // The suggestion panel replaces the nudge for the app it is about (spec §5.4).
                 if suggestion?.bundleID != bundleID || suggestion?.host != host {
@@ -187,6 +187,7 @@ final class AppState {
         if let n = nudge, let f = tracker.front, tracker.isOffTask, f.bundleID != n.bundleID || f.host != n.host {
             nudge = Nudge(bundleID: f.bundleID, host: f.host, startedAt: n.startedAt)
         }
+        restoreNudgeIfNeeded()
         if save || !outputs.isEmpty { checkpoint() }
         pushLive()
         // Once per apply, after the new stretch (if any) is open: a switch syncs both rows in one push.
@@ -275,10 +276,11 @@ final class AppState {
         guard let s = suggestion else { return }
         suggester.mute(s)
         suggestion = nil
+        restoreNudgeIfNeeded()
     }
 
     func undoSwitch() {
-        guard let u = undo, Date() < u.until, let p = findProject(u.fromID) else { undo = nil; return }
+        guard let u = undo, Date() < u.until, tracker.currentID == u.suggestion.projectID, let p = findProject(u.fromID) else { undo = nil; return }
         undo = nil
         switchTo(p, at: u.since) // the suggested stretch ends with zero length
         suggester.mute(u.suggestion) // after the switch: a new stretch resets mutes
@@ -286,7 +288,14 @@ final class AppState {
 
     private func updateSuggestPanel() {
         if suggestion == nil && undo == nil { suggestPanel.hide(); return }
-        suggestPanel.hide(); suggestPanel.show(self) // content size changes between ask and undo
+        if suggestPanel.isShowing { suggestPanel.refit() } else { suggestPanel.show(self) } // size changes between ask and undo
+    }
+
+    /// `.offTaskStarted` fires once per spell; if the nudge was suppressed or cleared meanwhile, bring it back.
+    private func restoreNudgeIfNeeded() {
+        if nudge == nil, suggestion == nil, tracker.isOffTask, let f = tracker.front {
+            nudge = Nudge(bundleID: f.bundleID, host: f.host, startedAt: .now)
+        }
     }
 
     private var candidates: [SwitchSuggester.Candidate] {

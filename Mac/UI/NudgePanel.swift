@@ -20,7 +20,12 @@ final class NudgePanelController {
     private var panel: NSPanel?
     private let content: (AppState) -> AnyView
 
-    init(content: @escaping (AppState) -> AnyView) { self.content = content }
+    private let key: Bool
+
+    /// `key: false` for panels that appear on their own, so they never steal the keystrokes of the app in front.
+    init(key: Bool = true, content: @escaping (AppState) -> AnyView) { self.key = key; self.content = content }
+
+    var isShowing: Bool { panel != nil }
 
     func show(_ app: AppState) {
         guard panel == nil else { return }
@@ -39,7 +44,7 @@ final class NudgePanelController {
             p.setFrameOrigin(NSPoint(x: f.maxX - p.frame.width - 16, y: f.maxY - p.frame.height - 16))
         }
         p.orderFrontRegardless()
-        p.makeKey()
+        if key { p.makeKey() }
         panel = p
     }
 
