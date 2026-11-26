@@ -62,4 +62,14 @@ public struct Allowlist: Sendable {
         if host.hasSuffix(".") { host.removeLast() }
         return domains.contains { host == $0 || host.hasSuffix("." + $0) }
     }
+
+    /// The app is on the list by bundle ID. Always-allowed apps (Stint, loginwindow, screen saver) don't count.
+    public func listsApp(_ bundleID: String) -> Bool { entries.contains(AllowEntry(.app, bundleID)) }
+
+    /// `host` equals, or is a subdomain of, a listed domain.
+    public func listsDomain(of host: String) -> Bool {
+        var h = host.lowercased()
+        if h.hasSuffix(".") { h.removeLast() }
+        return entries.contains { $0.kind == .domain && !$0.value.isEmpty && (h == $0.value || h.hasSuffix("." + $0.value)) }
+    }
 }
