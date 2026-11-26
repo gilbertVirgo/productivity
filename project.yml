@@ -21,9 +21,9 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
   configs:
     Release:
-      # Production values go here once the hosted project exists. Empty = "Sync not configured", never 127.0.0.1.
-      STINT_SUPABASE_URL: ""
-      STINT_SUPABASE_ANON_KEY: ""
+      # Hosted project (anon key is public by design).
+      STINT_SUPABASE_URL: "https:/$()/vaidmipsctbcgxeescqj.supabase.co"
+      STINT_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZhaWRtaXBzY3RiY2d4ZWVzY3FqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU2OTI4MzQsImV4cCI6MjExMTI2ODgzNH0.oI86qnzPMGc4UXD8bZx1i5gDA1rqyqR3NaUR6hncJ98"
       STINT_SHARE_URL: "https:/$()/gilbertvirgo.github.io/productivity/"
 targets:
   StintMac:
