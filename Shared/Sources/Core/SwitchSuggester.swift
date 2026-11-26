@@ -15,6 +15,9 @@ public struct SwitchSuggester: Sendable {
         public var since: Date
         public var bundleID: String
         public var host: String?
+        public init(projectID: UUID, since: Date, bundleID: String, host: String?) {
+            self.projectID = projectID; self.since = since; self.bundleID = bundleID; self.host = host
+        }
     }
 
     let dwell: TimeInterval

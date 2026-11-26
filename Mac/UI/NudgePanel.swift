@@ -18,6 +18,9 @@ func appName(_ bundleID: String) -> String {
 @MainActor
 final class NudgePanelController {
     private var panel: NSPanel?
+    private let content: (AppState) -> AnyView
+
+    init(content: @escaping (AppState) -> AnyView) { self.content = content }
 
     func show(_ app: AppState) {
         guard panel == nil else { return }
@@ -29,7 +32,7 @@ final class NudgePanelController {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.titleVisibility = .hidden; p.titlebarAppearsTransparent = true
         p.isReleasedWhenClosed = false
-        let host = NSHostingView(rootView: NudgeView().environment(app))
+        let host = NSHostingView(rootView: content(app))
         p.contentView = host
         p.setContentSize(host.fittingSize)
         if let f = NSScreen.main?.visibleFrame {
@@ -41,6 +44,8 @@ final class NudgePanelController {
     }
 
     func hide() { panel?.close(); panel = nil }
+
+    func refit() { if let p = panel, let v = p.contentView { p.setContentSize(v.fittingSize) } }
 }
 
 struct NudgeView: View {
@@ -66,5 +71,41 @@ struct NudgeView: View {
             }
             .padding(16).frame(width: 340, alignment: .leading)
         }
+    }
+}
+
+/// "Looks like Freelance — switch?" (spec 2026-11-26 §5.4; mockup "Mac · suggested switch").
+struct SuggestView: View {
+    @Environment(AppState.self) private var app
+
+    var body: some View {
+        Group {
+            if let s = app.suggestion, let to = app.findProject(s.projectID) {
+                let here = app.project?.menuTitle ?? "this project"
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ProjectIcon(name: to.name, colorHex: to.colorHex, icon: to.icon, size: 36)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Looks like \(to.name)").font(.headline)
+                            Text("\(s.host ?? appName(s.bundleID)) is on \(to.name)'s list. You're tracking \(app.project?.name ?? "another project").")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+                    HStack {
+                        Button("Switch from \(s.since.formatted(date: .omitted, time: .shortened))") { app.acceptSuggestion() }
+                            .buttonStyle(.borderedProminent).tint(Color(hex: to.colorHex))
+                        Button("Stay on \(here)") { app.staySuggestion() }
+                    }
+                    Text("Ignore it and the time stays on \(here) as off-task.").font(.caption).foregroundStyle(.secondary)
+                }
+            } else if let u = app.undo, let to = app.project {
+                HStack {
+                    Text("Switched to \(to.name) · counted from \(u.since.formatted(date: .omitted, time: .shortened))")
+                    Spacer()
+                    Button("Undo") { app.undoSwitch() }
+                }
+            }
+        }
+        .padding(16).frame(width: 340, alignment: .leading)
     }
 }

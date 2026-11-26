@@ -1,6 +1,7 @@
 import StintData
 import AppKit
 import SwiftData
+import SwiftUI
 import Core
 import os
 
@@ -15,6 +16,8 @@ extension Project {
         return name.count > 12 ? String(name.prefix(11)) + "…" : name
     }
 }
+
+struct SwitchUndo: Equatable { var fromID: UUID; var since: Date; var until: Date; var suggestion: SwitchSuggester.Suggestion }
 
 /// The Mac's tracking state (spec 2026-11-26 §5): one current project, switched from the menu bar, hotkey,
 /// suggestions or the phone.
@@ -33,7 +36,11 @@ final class AppState {
     var automationDenied = false
     var hotkeyUnavailable = false
 
-    @ObservationIgnored private let nudgePanel = NudgePanelController()
+    @ObservationIgnored private let nudgePanel = NudgePanelController { AnyView(NudgeView().environment($0)) }
+    @ObservationIgnored private let suggestPanel = NudgePanelController { AnyView(SuggestView().environment($0)) }
+    @ObservationIgnored private var suggester = SwitchSuggester()
+    var suggestion: SwitchSuggester.Suggestion? { didSet { updateSuggestPanel() } }
+    var undo: SwitchUndo? { didSet { updateSuggestPanel() } }
     @ObservationIgnored let ctx: ModelContext
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var monitor: ActivityMonitor?
@@ -167,8 +174,12 @@ final class AppState {
                 do { record = try Ledger.openStretch(ctx, projectID: id, startedAt: at) }
                 catch { Self.log.error("openStretch: \(error)") }
                 project = findProject(id)
+                suggester.reset(); suggestion = nil
             case let .offTaskStarted(bundleID, host):
-                nudge = Nudge(bundleID: bundleID, host: host, startedAt: Date())
+                // The suggestion panel replaces the nudge for the app it is about (spec §5.4).
+                if suggestion?.bundleID != bundleID || suggestion?.host != host {
+                    nudge = Nudge(bundleID: bundleID, host: host, startedAt: Date())
+                }
             case .offTaskEnded:
                 nudge = nil
             }
@@ -229,17 +240,57 @@ final class AppState {
     private func stopMonitoring() {
         timer?.invalidate(); timer = nil
         monitor?.stop(); monitor = nil
-        nudge = nil
+        nudge = nil; suggestion = nil; undo = nil
     }
 
     func observe(bundleID: String, host: String?) {
         run { $0.observe(bundleID: bundleID, host: host, at: .now) }
+        if let s = suggester.observe(bundleID: bundleID, host: host, current: tracker.currentID, projects: candidates, at: .now) {
+            suggestion = s
+        } else if let s = suggestion, suggester.pending?.projectID != s.projectID {
+            suggestion = nil // you moved away before deciding
+        }
     }
 
     /// Test hook: the 1 s timer's body, at a chosen time.
     func tick(at when: Date) {
         now = when
         run(checkpoint: false) { $0.tick(at: when) }
+        tickSuggest(at: when)
+    }
+
+    private func tickSuggest(at now: Date) {
+        if let s = suggester.tick(at: now) { suggestion = s; nudge = nil }
+        if let u = undo, now >= u.until { undo = nil }
+    }
+
+    func acceptSuggestion() {
+        guard let s = suggestion, let to = findProject(s.projectID), let from = tracker.currentID else { return }
+        suggestion = nil
+        switchTo(to, at: s.since)
+        undo = SwitchUndo(fromID: from, since: s.since, until: Date().addingTimeInterval(10), suggestion: s)
+    }
+
+    func staySuggestion() {
+        guard let s = suggestion else { return }
+        suggester.mute(s)
+        suggestion = nil
+    }
+
+    func undoSwitch() {
+        guard let u = undo, Date() < u.until, let p = findProject(u.fromID) else { undo = nil; return }
+        undo = nil
+        switchTo(p, at: u.since) // the suggested stretch ends with zero length
+        suggester.mute(u.suggestion) // after the switch: a new stretch resets mutes
+    }
+
+    private func updateSuggestPanel() {
+        if suggestion == nil && undo == nil { suggestPanel.hide(); return }
+        suggestPanel.hide(); suggestPanel.show(self) // content size changes between ask and undo
+    }
+
+    private var candidates: [SwitchSuggester.Candidate] {
+        activeProjects.map { .init(id: $0.id, allowlist: Self.tracked($0).allowlist) }
     }
 
     /// Test hook: whether the 1 s timer and activity monitor are live.
@@ -248,6 +299,7 @@ final class AppState {
     private func tick() {
         now = Date()
         run(checkpoint: false) { $0.tick(at: .now) }
+        tickSuggest(at: now)
         ticks += 1
         if ticks % 15 == 0 { checkpoint() }
         checkBreakAllowance()
