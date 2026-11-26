@@ -56,7 +56,9 @@ import Core
         try Ledger.checkpoint(ctx, record: rec,
                           events: [SessionEvent(.offtaskStart, at: t0 + 600), SessionEvent(.offtaskEnd, at: t0 + 900)],
                           allowAdded: [], at: t0 + 1200)
-        try Ledger.recoverOrphans(ctx, now: t0 + 99999)
+        let recovered = try Ledger.recoverOrphans(ctx, now: t0 + 99999)
+        #expect(recovered == [rec.id]) // the caller ends the phone's Live Activity for these
+        #expect(try Ledger.recoverOrphans(ctx, now: t0 + 99999).isEmpty)
         #expect(rec.endKind == "early")
         #expect(rec.earlyReason == "Stint quit during session")
         #expect(rec.endedAt == rec.updatedAt)

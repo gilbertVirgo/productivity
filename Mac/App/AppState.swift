@@ -35,6 +35,8 @@ final class AppState {
     @ObservationIgnored var onSessionClosed: (() -> Void)?
     /// Live Activity hook (plan 7): .start once, .update when what the phone shows changes, .end on close.
     @ObservationIgnored var onLive: ((LivePush) -> Void)?
+    /// Sessions closed at launch after a quit or crash; their Live Activity still needs an .end once signed in.
+    @ObservationIgnored var recoveredSessionIDs: [UUID] = []
     @ObservationIgnored private var lastLive: LiveSessionState?
 
     private func liveState(at now: Date) -> LiveSessionState? {
@@ -45,7 +47,7 @@ final class AppState {
 
     init(context: ModelContext) {
         ctx = context
-        do { try Ledger.recoverOrphans(ctx, now: .now) } catch { Self.log.error("recoverOrphans: \(error)") }
+        do { recoveredSessionIDs = try Ledger.recoverOrphans(ctx, now: .now) } catch { Self.log.error("recoverOrphans: \(error)") }
     }
 
     var isRunning: Bool { engine != nil }

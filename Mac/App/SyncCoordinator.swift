@@ -92,6 +92,10 @@ final class SyncCoordinator {
             return
         }
         userID = user.id
+        for id in app.recoveredSessionIDs {
+            sendLive(LivePush(event: .end, sessionID: id, attributes: nil, contentState: .ended(taskTitle: nil)))
+        }
+        app.recoveredSessionIDs = []
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in

@@ -53,8 +53,11 @@ public enum Ledger {
         (try? ctx.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == id })))?.first?.name ?? ""
     }
 
-    public static func recoverOrphans(_ ctx: ModelContext, now: Date) throws {
+    /// Closes sessions left open by a quit or crash; returns their ids so the caller can end the phone's Live Activity.
+    @discardableResult
+    public static func recoverOrphans(_ ctx: ModelContext, now: Date) throws -> [UUID] {
         let open = (try? ctx.fetch(FetchDescriptor<SessionRecord>(predicate: #Predicate { $0.endedAt == nil }))) ?? []
+        var closed: [UUID] = []
         for r in open {
             let end = r.updatedAt
             let events: [SessionEvent] = dec(r.eventsData)
@@ -62,9 +65,10 @@ public enum Ledger {
             let result = SessionResult(totals: t, completed: false,
                                        points: sessionPoints(totals: t, completed: false, breakOverSec: 0),
                                        events: events, allowAdded: dec(r.allowAddedData))
-            do { try close(ctx, record: r, result: result, endedAt: end, earlyReason: "Stint quit during session") }
+            do { try close(ctx, record: r, result: result, endedAt: end, earlyReason: "Stint quit during session"); closed.append(r.id) }
             catch { log.error("recoverOrphans failed for \(r.id): \(error)") }
         }
+        return closed
     }
 
     public static func balance(_ ctx: ModelContext) -> Int {
