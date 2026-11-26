@@ -127,6 +127,8 @@ final class PhoneSync {
 
     func signOut() async {
         if let engine, let userID { try? await engine.push(userID: userID) } // before the generation bump, so the push isn't discarded
+        // JWT still valid here: drop this phone's device row so the old account stops pushing to it.
+        if let engine, let s = defaults.string(forKey: Self.deviceIDKey), let id = UUID(uuidString: s) { try? await engine.deleteDevice(id: id) }
         generation += 1
         debounce?.cancel(); debounce = nil
         userID = nil
@@ -135,7 +137,7 @@ final class PhoneSync {
         while syncing { try? await Task.sleep(for: .milliseconds(50)) }
         do { try Self.wipe(ctx, defaults: defaults) } catch { Self.log.error("wipe: \(error.localizedDescription, privacy: .public)") }
         running = nil; snapshot = nil; lastSync = nil; lastError = nil; commandStatus = nil; pendingStart = nil
-        await live.reconcile(running: nil, projectName: nil, taskTitle: nil, now: .now) // the last account's activity ends
+        await live.reconcile(running: nil, projectName: nil, taskTitle: nil, now: .now, force: true) // the last account's activity ends
         live.forgetActivity()
         publish()
         state = .signedOut

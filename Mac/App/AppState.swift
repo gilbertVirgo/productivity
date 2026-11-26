@@ -150,8 +150,10 @@ final class AppState {
             nudge = Nudge(bundleID: f.bundleID, host: f.host, startedAt: n.startedAt)
         }
         if stateChange || !signals.isEmpty { checkpoint() }
-        // Idle or asleep freezes the countdown while the clock runs, so endsAt drifts every tick: hold pushes until it resumes.
-        if !e.idle, !e.asleep, let s = liveState(at: .now), let r = record, let last = lastLive, s.differs(from: last) {
+        // Asleep pauses the countdown while the clock runs, so endsAt drifts every tick; status/task changes still go out.
+        // Idle counts toward the planned length, so endsAt holds steady while idle.
+        if let s = liveState(at: .now), let r = record, let last = lastLive, s.differs(from: last),
+           !(e.asleep && s.status == last.status && s.taskTitle == last.taskTitle) {
             lastLive = s
             onLive?(LivePush(event: .update, sessionID: r.id, attributes: nil, contentState: s))
         }

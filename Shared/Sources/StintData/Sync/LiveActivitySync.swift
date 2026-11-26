@@ -12,4 +12,9 @@ extension SyncEngine {
     public func saveDevice(_ row: DeviceRow) async throws {
         try await client.from("device").upsert([row], onConflict: "id", returning: .minimal).execute()
     }
+
+    /// Removes this phone's device row so a signed-out phone stops receiving the account's activities.
+    public func deleteDevice(id: UUID) async throws {
+        try await client.from("device").delete().eq("id", value: id).execute()
+    }
 }

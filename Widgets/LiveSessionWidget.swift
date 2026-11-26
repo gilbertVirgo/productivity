@@ -49,6 +49,8 @@ private struct Clock: View {
                 Text(timerInterval: now...end, countsDown: true)
             } else if state.status == .ended {
                 Image(systemName: "checkmark.circle.fill")
+            } else if state.endsDate != nil {
+                Text(remainingText(0)) // endsAt passed; remainingSec is stale from the last push
             } else {
                 Text(remainingText(state.remainingSec))
             }
