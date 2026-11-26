@@ -236,3 +236,26 @@ public struct SessionTotalsRow: Decodable, Sendable, Equatable {
         SessionSummary(projectID: projectID, startedAt: startedAt, focusedSec: focusedSec, breakSec: breakSec)
     }
 }
+
+/// The phone's push tokens (plan 7). Written by the phone only; read by `push-activity` through RLS.
+public struct DeviceRow: Codable, Sendable, Equatable {
+    public var id: UUID, userID: UUID, updatedAt: Date
+    public var platform: String
+    public var pushToStartToken: String?, activityToken: String?, activitySessionID: UUID?
+    public init(id: UUID, userID: UUID, updatedAt: Date, platform: String,
+                pushToStartToken: String?, activityToken: String?, activitySessionID: UUID?) {
+        self.id = id; self.userID = userID; self.updatedAt = updatedAt; self.platform = platform
+        self.pushToStartToken = pushToStartToken; self.activityToken = activityToken; self.activitySessionID = activitySessionID
+    }
+    enum CodingKeys: String, CodingKey {
+        case id, userID = "user_id", updatedAt = "updated_at", platform
+        case pushToStartToken = "push_to_start_token", activityToken = "activity_token", activitySessionID = "activity_session_id"
+    }
+    public func encode(to e: Encoder) throws {
+        var c = e.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id); try c.encode(userID, forKey: .userID); try c.encode(updatedAt, forKey: .updatedAt)
+        try c.encode(platform, forKey: .platform)
+        try c.encode(pushToStartToken, forKey: .pushToStartToken); try c.encode(activityToken, forKey: .activityToken)
+        try c.encode(activitySessionID, forKey: .activitySessionID)
+    }
+}
