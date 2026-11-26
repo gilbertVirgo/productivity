@@ -54,9 +54,9 @@ begin
     if p.weekly_hours_goal is not null then
       select coalesce(sum(focused_sec), 0) into secs from session_totals
        where project_id = p.id and ended_at is not null and started_at >= w0 and started_at < w1;
-      -- Shown hours round down, so a goal that isn't met never displays as reaching its target.
+      -- Shown hours round down (to 0.01), so a goal that isn't met never displays as reaching its target.
       goals := goals || jsonb_build_object('kind', 'hours', 'target', p.weekly_hours_goal,
-        'actual', round(floor(secs / 360.0) / 10, 1), 'status', goal_status(p.weekly_hours_goal * 3600, secs, elapsed, false));
+        'actual', round(floor(secs / 36.0) / 100, 2), 'status', goal_status(p.weekly_hours_goal * 3600, secs, elapsed, false));
     end if;
     if p.tasks_goal is not null and p.tasks_goal_period = 'week' then
       select count(*) into cnt from task where project_id = p.id and done_at >= w0 and done_at < w1;
@@ -79,7 +79,7 @@ begin
           select coalesce(sum(focused_sec), 0) into secs from session_totals
            where project_id = p.id and ended_at is not null and started_at >= d0 and started_at < d1;
           days := days || jsonb_build_object('date', d, 'kind', 'hours', 'target', p.daily_hours_goal,
-            'actual', round(floor(secs / 360.0) / 10, 1),
+            'actual', round(floor(secs / 36.0) / 100, 2),
             'status', goal_status(p.daily_hours_goal * 3600, secs, day_elapsed, d < today));
         end if;
       end if;
@@ -114,7 +114,7 @@ begin
     'week_start', wk,
     'week_end', wk + 6,
     -- Last finished session on a shared project: running sessions aren't counted, so they don't move it either.
-    'updated_at', (select max(s.ended_at) from session s join project pr on pr.id = s.project_id
+    'updated_at', (select date_trunc('minute', max(s.ended_at)) from session s join project pr on pr.id = s.project_id
                     where s.user_id = uid and pr.shared and pr.archived_at is null),
     'projects', projects);
 end $$;

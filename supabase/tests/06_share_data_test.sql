@@ -60,7 +60,7 @@ select ok(pg_temp.share()::text !~ '(Northwind|Hidden|secret task|Sam|Old)', 'no
 -- Week: 2 h of 4 at 2.5/7 elapsed (needs 1.43) → on track; 1 task of 2 (needs 0.71) → on track.
 select is((select string_agg(g ->> 'kind' || ':' || (g ->> 'actual')::numeric || ':' || (g ->> 'status'), ',')
              from jsonb_array_elements(pg_temp.share() #> '{projects,0,goals}') g),
-  'hours:2.0:on_track,tasks:1:on_track', 'weekly goals with live actuals and status');
+  'hours:2.00:on_track,tasks:1:on_track', 'weekly goals with live actuals and status');
 select is((select string_agg((d ->> 'date') || '=' || (d ->> 'status'), ',')
              from jsonb_array_elements(pg_temp.share() #> '{projects,0,days}') d),
   '2026-11-23=met,2026-11-24=missed,2026-11-25=on_track,2026-11-26=upcoming,2026-11-27=upcoming',

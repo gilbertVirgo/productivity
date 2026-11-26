@@ -50,7 +50,8 @@ function el(tag, cls, text) {
 function message(text) { app.replaceChildren(el("p", "empty", text)); }
 function day(iso) { return new Date(iso + "T12:00:00Z"); }
 function fmt(d, opts) { return d.toLocaleDateString(undefined, { timeZone: "UTC", ...opts }); }
-function amount(kind, v) { return kind === "hours" ? `${Number(v).toFixed(1)} h` : `${v} ${v === 1 ? "task" : "tasks"}`; }
+function hours(v) { return (Math.floor(Number(v) * 100) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 }); } // never rounds up to a target
+function amount(kind, v) { return kind === "hours" ? `${hours(v)} h` : `${v} ${v === 1 ? "task" : "tasks"}`; }
 function goalName(kind, period) { return `${kind === "hours" ? "Hours" : "Tasks"} ${period === "day" ? "that day" : "this week"}`; }
 
 function render(data) {

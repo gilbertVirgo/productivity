@@ -62,7 +62,7 @@ struct FriendsView: View {
 
     private func load() async {
         guard signedIn else { links = []; return }
-        do { links = try await sync.shareLinks(); error = nil } catch { self.error = error.localizedDescription }
+        do { links = try await sync.shareLinks(); error = nil } catch { if !Task.isCancelled { self.error = error.localizedDescription } }
     }
 
     private func create() async {

@@ -58,6 +58,7 @@ The hosted project, and linking to it, come in plan 4.
 
 - Local: run `python3 -m http.server 8787 --bind 127.0.0.1 --directory share-site`, then open `http://127.0.0.1:8787/?t=<token>`.
   The Mac's Debug build makes links to this address.
+- Until then the deployed page points at 127.0.0.1 and shows "Couldn't load". Update `config.js` together with the Release Supabase values in `project.yml`.
 - Production: set `share-site/config.js` to the hosted project's URL and anon key, enable GitHub Pages
   (Settings → Pages → Source: GitHub Actions), and push. The workflow publishes `share-site/` to
   `https://gilbertvirgo.github.io/productivity/`.
