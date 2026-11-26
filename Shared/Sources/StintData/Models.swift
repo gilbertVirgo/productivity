@@ -22,6 +22,12 @@ public extension Syncable {
     public var tasksGoalPeriod: String
     public var shared: Bool
     public var archivedAt: Date?
+    /// SF Symbol name; nil shows initials on the colour (spec 2026-11-26 §3).
+    public var icon: String? = nil
+    /// Menu bar name; nil uses the name, truncated.
+    public var shortName: String? = nil
+    /// Idle, sleep and off-task checks are off while this project is current (spec §5.6).
+    public var offMac: Bool = false
     @Relationship(deleteRule: .cascade, inverse: \AllowRule.project) public var allowRules: [AllowRule] = []
     @Relationship(deleteRule: .cascade, inverse: \TaskItem.project) public var tasks: [TaskItem] = []
 

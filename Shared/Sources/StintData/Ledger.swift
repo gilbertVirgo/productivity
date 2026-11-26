@@ -53,20 +53,65 @@ public enum Ledger {
         (try? ctx.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == id })))?.first?.name ?? ""
     }
 
-    /// Closes sessions left open by a quit or crash; returns their ids so the caller can end the phone's Live Activity.
+    /// Opens a stretch (spec 2026-11-26 §3): no planned length (stored as 0, sent as null), no allowlist snapshot.
+    public static func openStretch(_ ctx: ModelContext, projectID: UUID, startedAt: Date) throws -> SessionRecord {
+        let r = SessionRecord(projectID: projectID, firstTaskID: nil, plannedMin: 0, startedAt: startedAt, allowData: Data("[]".utf8))
+        ctx.insert(r)
+        try ctx.save()
+        return r
+    }
+
+    /// Closes a stretch and brings `day`'s points up to date (spec §4). `now` stamps `updatedAt`: a backdated
+    /// end can be earlier than the last checkpoint, and the server drops updates older than what it has.
     @discardableResult
-    public static func recoverOrphans(_ ctx: ModelContext, now: Date) throws -> [UUID] {
+    public static func closeStretch(_ ctx: ModelContext, record: SessionRecord, result: StretchResult,
+                                    day: DateInterval, allowanceSec: Int, now: Date) throws -> [PointLine] {
+        guard record.endedAt == nil else { return [] }
+        let t = result.totals
+        record.focusedSec = t.focusedSec; record.offtaskSec = t.offtaskSec; record.breakSec = t.breakSec
+        record.idleSec = t.idleSec; record.sleepSec = t.sleepSec
+        record.endedAt = result.endedAt
+        record.endKind = result.end.rawValue
+        record.eventsData = try enc(result.events)
+        record.updatedAt = max(now, record.updatedAt)
+        record.syncedAt = nil
+        try ctx.save()
+
+        let start = day.start, end = day.end
+        let closed = try ctx.fetch(FetchDescriptor<SessionRecord>(
+            predicate: #Predicate { $0.endedAt != nil && $0.startedAt >= start && $0.startedAt < end }))
+        let today = closed.reduce(SessionTotals()) {
+            $0 + SessionTotals(focusedSec: $1.focusedSec, offtaskSec: $1.offtaskSec, breakSec: $1.breakSec)
+        }
+        var written: [PointKind: Int] = [:]
+        for e in try ctx.fetch(FetchDescriptor<PointEvent>(predicate: #Predicate { $0.at >= start && $0.at < end })) {
+            if let k = PointKind(rawValue: e.kind), [.focus, .offtask, .breakOver].contains(k) { written[k, default: 0] += e.delta }
+        }
+        let lines = dayPoints(today: today, allowanceSec: allowanceSec, written: written)
+        let at = min(result.endedAt, end.addingTimeInterval(-1)) // a midnight split ends at the next day's first second
+        let note = projectName(ctx, record.projectID)
+        for l in lines { ctx.insert(PointEvent(at: at, delta: l.delta, kind: l.kind.rawValue, refID: record.id, note: note)) }
+        try ctx.save()
+        return lines
+    }
+
+    /// Closes stretches left open by a quit or crash at their last checkpoint; returns their ids so the caller
+    /// can end the phone's Live Activity.
+    @discardableResult
+    public static func recoverOrphans(_ ctx: ModelContext, now: Date, allowanceSec: Int = 3600) throws -> [UUID] {
         let open = (try? ctx.fetch(FetchDescriptor<SessionRecord>(predicate: #Predicate { $0.endedAt == nil }))) ?? []
+        let cal = PeriodCalendar(timeZone: .current)
         var closed: [UUID] = []
         for r in open {
             let end = r.updatedAt
-            let events: [SessionEvent] = dec(r.eventsData)
-            let t = sessionTotals(start: r.startedAt, end: end, events: events)
-            let result = SessionResult(totals: t, completed: false,
-                                       points: sessionPoints(totals: t, completed: false, breakOverSec: 0),
-                                       events: events, allowAdded: dec(r.allowAddedData))
-            do { try close(ctx, record: r, result: result, endedAt: end, earlyReason: "Stint quit during session"); closed.append(r.id) }
-            catch { log.error("recoverOrphans failed for \(r.id): \(error)") }
+            let events = (dec(r.eventsData) as [SessionEvent]).filter { $0.at <= end }
+            let result = StretchResult(projectID: r.projectID, startedAt: r.startedAt, endedAt: end, end: .stopped,
+                                       events: events, totals: sessionTotals(start: r.startedAt, end: end, events: events))
+            do {
+                try closeStretch(ctx, record: r, result: result, day: cal.dayInterval(containing: r.startedAt),
+                                 allowanceSec: allowanceSec, now: now)
+                closed.append(r.id)
+            } catch { log.error("recoverOrphans failed for \(r.id): \(error)") }
         }
         return closed
     }

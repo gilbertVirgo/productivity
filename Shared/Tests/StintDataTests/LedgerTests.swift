@@ -59,14 +59,33 @@ import Core
         let recovered = try Ledger.recoverOrphans(ctx, now: t0 + 99999)
         #expect(recovered == [rec.id]) // the caller ends the phone's Live Activity for these
         #expect(try Ledger.recoverOrphans(ctx, now: t0 + 99999).isEmpty)
-        #expect(rec.endKind == "early")
-        #expect(rec.earlyReason == "Stint quit during session")
-        #expect(rec.endedAt == rec.updatedAt)
+        #expect(rec.endKind == "stopped")
+        #expect(rec.earlyReason == nil)
+        #expect(rec.endedAt == t0 + 1200)
         #expect(rec.focusedSec == 900)
         #expect(rec.offtaskSec == 300)
         let pts = try ctx.fetch(FetchDescriptor<PointEvent>(sortBy: [SortDescriptor(\.delta, order: .reverse)]))
         #expect(pts.map(\.delta) == [15, -10])
         #expect(pts.map(\.kind) == ["focus", "offtask"])
+    }
+
+    @Test func shortStretchesScorePointsOnTheDayTotal() throws {
+        let ctx = try makeCtx()
+        let p = project(ctx); try ctx.save()
+        let day = PeriodCalendar(timeZone: .current).dayInterval(containing: .now)
+        var t = day.start.addingTimeInterval(3600)
+        var lines: [PointLine] = []
+        for _ in 0..<3 {
+            let r = try Ledger.openStretch(ctx, projectID: p.id, startedAt: t)
+            #expect(r.plannedMin == 0)
+            let res = StretchResult(projectID: p.id, startedAt: t, endedAt: t + 90, end: .switched, events: [],
+                                    totals: SessionTotals(focusedSec: 90))
+            lines += try Ledger.closeStretch(ctx, record: r, result: res, day: day, allowanceSec: 3600, now: t + 90)
+            #expect(r.endKind == "switched")
+            t += 90
+        }
+        #expect(lines.map(\.delta) == [1, 2, 1]) // 90 s, 180 s, 270 s → 1, 3, 4 minutes
+        #expect(Ledger.balance(ctx) == 4)
     }
 
     @Test func recoveredOrphanIsDirty() throws {

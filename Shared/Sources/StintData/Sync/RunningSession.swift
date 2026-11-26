@@ -16,7 +16,7 @@ public struct RunningSession: Sendable, Equatable {
     }
 
     public init(row: SessionRow, events: [SessionEventRow]) {
-        self.init(id: row.id, projectID: row.projectID, firstTaskID: row.firstTaskID, plannedMin: row.plannedMin,
+        self.init(id: row.id, projectID: row.projectID, firstTaskID: row.firstTaskID, plannedMin: row.plannedMin ?? 0,
                   startedAt: row.startedAt, lastSeen: row.updatedAt,
                   events: events.compactMap { e in
                       SessionEventType(rawValue: e.type).map { SessionEvent($0, at: e.at, detail: e.detail.isEmpty ? nil : e.detail) }

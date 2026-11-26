@@ -9,7 +9,8 @@ public enum Mapping {
     public static func row(_ p: Project, userID: UUID) -> ProjectRow {
         ProjectRow(id: p.id, userID: userID, updatedAt: p.updatedAt, name: p.name, shareAlias: p.shareAlias, color: p.colorHex,
                    weeklyHoursGoal: p.weeklyHoursGoal, dailyHoursGoal: p.dailyHoursGoal, dailyGoalDays: p.dailyGoalDays,
-                   tasksGoal: p.tasksGoal, tasksGoalPeriod: p.tasksGoalPeriod, shared: p.shared, archivedAt: p.archivedAt)
+                   tasksGoal: p.tasksGoal, tasksGoalPeriod: p.tasksGoalPeriod, shared: p.shared, archivedAt: p.archivedAt,
+                   icon: p.icon, shortName: p.shortName, offMac: p.offMac)
     }
 
     /// nil when the rule has no project (orphan).
@@ -31,7 +32,7 @@ public enum Mapping {
 
     public static func row(_ s: SessionRecord, userID: UUID, device: String = "mac") -> SessionRow {
         SessionRow(id: s.id, userID: userID, createdAt: s.createdAt, updatedAt: s.updatedAt, projectID: s.projectID,
-                   firstTaskID: s.firstTaskID, plannedMin: s.plannedMin, startedAt: s.startedAt, endedAt: s.endedAt,
+                   firstTaskID: s.firstTaskID, plannedMin: s.plannedMin > 0 ? s.plannedMin : nil, startedAt: s.startedAt, endedAt: s.endedAt,
                    endKind: s.endKind, earlyReason: s.earlyReason, device: device)
     }
 
@@ -67,6 +68,7 @@ public enum Mapping {
         p.name = r.name; p.shareAlias = r.shareAlias; p.colorHex = r.color
         p.weeklyHoursGoal = r.weeklyHoursGoal; p.dailyHoursGoal = r.dailyHoursGoal; p.dailyGoalDays = r.dailyGoalDays
         p.tasksGoal = r.tasksGoal; p.tasksGoalPeriod = r.tasksGoalPeriod; p.shared = r.shared; p.archivedAt = r.archivedAt
+        p.icon = r.icon; p.shortName = r.shortName; p.offMac = r.offMac
         p.updatedAt = r.updatedAt; p.syncedAt = r.updatedAt
     }
 
@@ -95,7 +97,7 @@ public enum Mapping {
     /// Never overwrites a running local session: the Mac owns it. Totals and events stay local.
     public static func apply(_ r: SessionRow, to s: SessionRecord) -> Bool {
         guard s.endedAt != nil, r.updatedAt > s.updatedAt else { return false }
-        s.firstTaskID = r.firstTaskID; s.plannedMin = r.plannedMin; s.startedAt = r.startedAt
+        s.firstTaskID = r.firstTaskID; s.plannedMin = r.plannedMin ?? 0; s.startedAt = r.startedAt
         s.endedAt = r.endedAt; s.endKind = r.endKind; s.earlyReason = r.earlyReason
         s.updatedAt = r.updatedAt; s.syncedAt = r.updatedAt
         return true

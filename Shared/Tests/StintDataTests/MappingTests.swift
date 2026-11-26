@@ -19,7 +19,8 @@ import Core
         #expect(j["archived_at"] is NSNull)
         #expect(j["weekly_hours_goal"] is NSNull)
         #expect(Set(j.keys) == ["id", "user_id", "updated_at", "name", "share_alias", "color", "weekly_hours_goal",
-                                "daily_hours_goal", "daily_goal_days", "tasks_goal", "tasks_goal_period", "shared", "archived_at"])
+                                "daily_hours_goal", "daily_goal_days", "tasks_goal", "tasks_goal_period", "shared", "archived_at",
+                                "icon", "short_name", "off_mac"])
         #expect(j["daily_goal_days"] as? [Int] == [1, 2, 3, 4, 5])
     }
 
@@ -89,5 +90,17 @@ import Core
         #expect(made.project?.id == p.id)
         #expect(made.syncedAt == row.updatedAt)
         #expect(Mapping.insert(ProjectAllowRow(id: UUID(), userID: uid, updatedAt: .now, projectID: UUID(), kind: "app", value: "x", label: ""), in: c) == nil)
+    }
+
+    @Test func stretchesSendNoPlannedLengthAndProjectsCarryNewFields() throws {
+        let c = try ModelContainer(for: Schema(StintSchema.models), configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let p = Project(name: "Christian Heritage"); p.icon = "building.columns"; p.shortName = "CHL"; p.offMac = true
+        c.mainContext.insert(p)
+        let r = Mapping.row(p, userID: UUID())
+        #expect(r.icon == "building.columns" && r.shortName == "CHL" && r.offMac)
+        let json = String(decoding: try JSONEncoder().encode(r), as: UTF8.self)
+        #expect(json.contains("\"short_name\":\"CHL\"") && json.contains("\"off_mac\":true"))
+        let s = SessionRecord(projectID: p.id, firstTaskID: nil, plannedMin: 0, startedAt: .now, allowData: Data("[]".utf8))
+        #expect(Mapping.row(s, userID: UUID(), device: "mac").plannedMin == nil)
     }
 }

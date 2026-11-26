@@ -15,12 +15,15 @@ public struct ProjectRow: Codable, Sendable, Equatable {
     public var tasksGoalPeriod: String
     public var shared: Bool
     public var archivedAt: Date?
+    public var icon: String? = nil, shortName: String? = nil
+    public var offMac: Bool = false
     public var serverUpdatedAt: Date? = nil
     public var createdAt: Date? = nil // receive-only
     enum CodingKeys: String, CodingKey {
         case id, userID = "user_id", updatedAt = "updated_at", name, shareAlias = "share_alias", color
         case weeklyHoursGoal = "weekly_hours_goal", dailyHoursGoal = "daily_hours_goal", dailyGoalDays = "daily_goal_days"
         case tasksGoal = "tasks_goal", tasksGoalPeriod = "tasks_goal_period", shared, archivedAt = "archived_at"
+        case icon, shortName = "short_name", offMac = "off_mac"
         case serverUpdatedAt = "server_updated_at", createdAt = "created_at"
     }
     public func encode(to e: Encoder) throws {
@@ -31,6 +34,7 @@ public struct ProjectRow: Codable, Sendable, Equatable {
         try c.encode(dailyGoalDays, forKey: .dailyGoalDays)
         try c.encode(tasksGoal, forKey: .tasksGoal); try c.encode(tasksGoalPeriod, forKey: .tasksGoalPeriod)
         try c.encode(shared, forKey: .shared); try c.encode(archivedAt, forKey: .archivedAt)
+        try c.encode(icon, forKey: .icon); try c.encode(shortName, forKey: .shortName); try c.encode(offMac, forKey: .offMac)
     }
 }
 
@@ -76,7 +80,7 @@ public struct TaskRow: Codable, Sendable, Equatable {
 public struct SessionRow: Codable, Sendable, Equatable {
     public var id: UUID, userID: UUID, createdAt: Date, updatedAt: Date, projectID: UUID
     public var firstTaskID: UUID?
-    public var plannedMin: Int
+    public var plannedMin: Int?
     public var startedAt: Date
     public var endedAt: Date?
     public var endKind: String?, earlyReason: String?

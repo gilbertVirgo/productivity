@@ -20,6 +20,10 @@ public struct StretchResult: Equatable, Sendable {
     public var end: StretchEnd
     public var events: [SessionEvent]
     public var totals: SessionTotals
+    public init(projectID: UUID, startedAt: Date, endedAt: Date, end: StretchEnd, events: [SessionEvent], totals: SessionTotals) {
+        self.projectID = projectID; self.startedAt = startedAt; self.endedAt = endedAt
+        self.end = end; self.events = events; self.totals = totals
+    }
 }
 
 /// What is being tracked right now: one stretch on one project at a time (spec 2026-11-26 §5.1–5.3, 5.6).
