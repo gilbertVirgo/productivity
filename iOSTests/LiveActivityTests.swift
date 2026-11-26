@@ -27,6 +27,12 @@ import Core
         #expect(forced.end == ["1"])
     }
 
+    @Test func deadKeptActivityIsNotPreferred() {
+        #expect(LiveActivities.tokenID(kept: "1", arrived: "2", active: ["2"]) == "2")
+        #expect(LiveActivities.tokenID(kept: "1", arrived: "2", active: ["1", "2"]) == "1")
+        #expect(LiveActivities.tokenID(kept: nil, arrived: "2", active: ["2"]) == "2")
+    }
+
     @Test func hexToken() {
         #expect(Data([0x00, 0xab, 0x10]).hexString == "00ab10")
     }

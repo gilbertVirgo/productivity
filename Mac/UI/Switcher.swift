@@ -115,7 +115,7 @@ struct SwitcherView: View {
             Button("Break") { app.tracker.onBreak ? app.resume() : app.takeBreak(); close() }
                 .keyboardShortcut("b", modifiers: .command).hidden()
         }
-        .onAppear { focused = true }
+        .onAppear { DispatchQueue.main.async { focused = true } } // the non-activating panel isn't key yet
     }
 
     private func row(_ i: Int, _ p: Project) -> some View {

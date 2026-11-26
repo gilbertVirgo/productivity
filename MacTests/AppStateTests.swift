@@ -37,6 +37,17 @@ import StintData
         app.stop()
     }
 
+    @MainActor @Test func todayNumbersUseTheRealDayWhileStopped() throws {
+        let c = try ModelContainer(for: Schema(StintSchema.models), configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let a = Project(name: "A")
+        c.mainContext.insert(a); try c.mainContext.save()
+        let app = AppState(context: c.mainContext)
+        app.switchTo(a, at: .now - 120); app.stop()
+        app.now = .now - 86400 * 2 // stale clock from the last tick
+        #expect(app.focusedToday(a.id) > 0)
+        #expect(app.todayStats().focusedSec > 0)
+    }
+
     @MainActor @Test func midnightStopOfAnOffMacProjectStopsMonitoring() throws {
         let c = try ModelContainer(for: Schema(StintSchema.models), configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let books = Project(name: "Books"), b = Project(name: "B")

@@ -75,6 +75,7 @@ struct MenuBarView: View {
             }.font(.caption)
         }
         .padding(14).frame(width: 340)
+        .onAppear { app.now = Date() }
     }
 }
 

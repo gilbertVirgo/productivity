@@ -277,7 +277,7 @@ final class PhoneSync {
             let id = try await engine.sendCommand(cmd, userID: userID)
             // awaitCommandOutcome ignores cancellation: a cancelled sleep returns at once, so make the poll throw
             // (it counts as pending, no network) and discard the outcome below.
-            let outcome = await awaitCommandOutcome(sleep: { try? await Task.sleep(for: .seconds(1)) },
+            let outcome = await awaitCommandOutcome(attempts: 10, sleep: { try? await Task.sleep(for: .seconds(1)) },
                                                     poll: { try Task.checkCancellation(); return try await engine.command(id) })
             guard !Task.isCancelled else {
                 // §6.3: an abandoned command must not run later. Unstructured so the delete isn't cancelled too.

@@ -54,7 +54,8 @@ final class LiveActivities {
 
     /// Uploads the kept activity's token (or, before any reconcile, the one that just arrived).
     private func selectToken(arrived: String? = nil) {
-        guard let id = keptID ?? arrived, let t = activityTokens[id] else { return }
+        let active = Set(Activity<StintActivityAttributes>.activities.map(\.id))
+        guard let id = Self.tokenID(kept: keptID, arrived: arrived, active: active), let t = activityTokens[id] else { return }
         var next = tokens
         next.activity = t.token; next.activitySessionID = t.sessionID
         guard next != tokens else { return }
@@ -62,11 +63,19 @@ final class LiveActivities {
         onTokens?(tokens)
     }
 
+    /// Pure: the kept activity wins only while it is still active; otherwise the one that just arrived.
+    nonisolated static func tokenID(kept: String?, arrived: String?, active: Set<String>) -> String? {
+        if let k = kept, active.contains(k) { return k }
+        return arrived
+    }
+
     /// Makes the activities match the session feed: one for the running session, none otherwise.
     /// `force` also ends young activities (sign-out).
     func reconcile(running: RunningSession?, project: Project?, now: Date, force: Bool = false) async {
         let all = Activity<StintActivityAttributes>.activities.filter { $0.activityState == .active || $0.activityState == .stale }
         for a in all { firstSeen[a.id] = firstSeen[a.id] ?? now }
+        // The Mac's `.end` push can end an activity behind our back: forget a kept one that's gone.
+        if let k = keptID, !all.contains(where: { $0.id == k }) { activityTokens[k] = nil; keptID = nil }
         let plan = Self.plan(existing: all.map { (id: $0.id, young: now.timeIntervalSince(firstSeen[$0.id] ?? now) < Self.youngSec) },
                              running: running != nil, force: force)
         for a in all where plan.end.contains(a.id) {

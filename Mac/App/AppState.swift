@@ -82,7 +82,7 @@ final class AppState {
 
     /// Focused seconds today on one project, including the open stretch.
     func focusedToday(_ projectID: UUID) -> Int {
-        let day = calendar.dayInterval(containing: now)
+        let day = calendar.dayInterval(containing: isTracking ? now : Date())
         let closed = Ledger.summaries(ctx, since: day.start)
             .filter { $0.projectID == projectID && $0.startedAt < day.end }.reduce(0) { $0 + $1.focusedSec }
         let open = tracker.currentID == projectID ? (tracker.engine?.totals(at: now).focusedSec ?? 0) : 0
@@ -90,7 +90,7 @@ final class AppState {
     }
 
     func todayStats() -> TodayStats {
-        let day = calendar.dayInterval(containing: now)
+        let day = calendar.dayInterval(containing: isTracking ? now : Date())
         let sessions = Ledger.summaries(ctx, since: day.start).filter { $0.startedAt < day.end }
         var focused = sessions.reduce(0) { $0 + $1.focusedSec }
         var breakUsed = Core.breakSec(sessions, in: day)

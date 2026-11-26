@@ -43,6 +43,7 @@ struct TodayView: View {
                 }
             }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
         }
+        .onAppear { app.now = Date() }
     }
 
     private func stat(_ label: String, _ value: String) -> some View {

@@ -32,6 +32,7 @@ struct DeskView: View {
                              title: running?.onBreak == true ? "On break" : "Break", sub: "Pause the current project") {
                             symbol("cup.and.saucer")
                         } action: { running?.onBreak == true ? .breakEnd : .breakStart }
+                        .disabled(running == nil)
                         tile(key: "stop", on: running == nil, color: Color(red: 1, green: 0.54, blue: 0.5),
                              title: running == nil ? "Stopped" : "Stop", sub: running == nil ? "Tap a project to start" : "Done for now") {
                             symbol("stop.fill")
@@ -82,7 +83,7 @@ struct DeskView: View {
             sending = key
             Task {
                 await sync.send(action())
-                if sync.commandStatus != nil { shake = key }
+                if sync.commandStatus != nil { shake = nil; shake = key }
                 sending = nil
             }
         } label: {
