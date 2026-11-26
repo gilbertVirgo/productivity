@@ -30,7 +30,7 @@ targets:
     sources:
       - Mac
       - path: SharedUI
-        excludes: [WeekBars.swift, SnapshotStore.swift, StartLink.swift]
+        excludes: [WeekBars.swift, SnapshotStore.swift, StartLink.swift, StintActivity.swift]
     dependencies:
       - package: Core
       - package: Core
@@ -99,6 +99,7 @@ targets:
         NSMicrophoneUsageDescription: "Stint listens while you dictate tasks. Audio stays on this device."
         NSSpeechRecognitionUsageDescription: "Stint turns your dictation into text on this device, then into a task list."
         UILaunchScreen: {}
+        NSSupportsLiveActivities: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         StintSupabaseURL: $(STINT_SUPABASE_URL)
         StintSupabaseAnonKey: $(STINT_SUPABASE_ANON_KEY)
@@ -112,6 +113,7 @@ targets:
       properties:
         com.apple.security.application-groups: [group.dev.stint]
         com.apple.developer.applesignin: [Default]
+        aps-environment: development
     settings:
       base:
         PRODUCT_NAME: Stint
@@ -144,6 +146,7 @@ targets:
       - SharedUI/WeekBars.swift
       - SharedUI/SnapshotStore.swift
       - SharedUI/StartLink.swift
+      - SharedUI/StintActivity.swift
     dependencies:
       - package: Core
     info:

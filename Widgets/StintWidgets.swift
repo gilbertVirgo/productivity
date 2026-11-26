@@ -94,5 +94,5 @@ struct StartWidget: Widget {
 
 @main
 struct StintWidgets: WidgetBundle {
-    var body: some Widget { WeekWidget(); TodayWidget(); StartWidget() }
+    var body: some Widget { WeekWidget(); TodayWidget(); StartWidget(); LiveSessionWidget() }
 }

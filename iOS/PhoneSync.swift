@@ -5,6 +5,7 @@ import StintData
 import Core
 import os
 import WidgetKit
+import ActivityKit
 import AuthenticationServices
 
 /// The phone's sync: auth, push/pull through the shared SyncEngine, the session feed, and commands to the Mac.
@@ -25,6 +26,8 @@ final class PhoneSync {
     var pendingStart: UUID?
     let configured: Bool
     let cal = PeriodCalendar(timeZone: .current)
+    @ObservationIgnored let live = LiveActivities()
+    static let deviceIDKey = "deviceID"
 
     @ObservationIgnored private let ctx: ModelContext
     @ObservationIgnored private let defaults: UserDefaults
@@ -159,11 +162,38 @@ final class PhoneSync {
     private func applyActive(_ active: Bool) async {
         guard let engine, let userID else { return }
         if active {
+            live.onTokens = { [weak self] t in Task { await self?.saveDevice(t) } }
+            live.startObserving()
+            await saveDevice(live.tokens) // a token that arrived before sign-in
             await engine.startRealtime(userID: userID) { [weak self] in self?.syncSoon() }
             await refresh()
         } else {
             await engine.stopRealtime()
         }
+    }
+
+    /// This phone's stable `device.id`.
+    private var deviceID: UUID {
+        if let s = defaults.string(forKey: Self.deviceIDKey), let id = UUID(uuidString: s) { return id }
+        let id = UUID(); defaults.set(id.uuidString, forKey: Self.deviceIDKey); return id
+    }
+
+    private func saveDevice(_ t: LiveActivities.Tokens) async {
+        guard let engine, let userID, t.pushToStart != nil || t.activity != nil else { return }
+        let row = DeviceRow(id: deviceID, userID: userID, updatedAt: .now, platform: "ios",
+                            pushToStartToken: t.pushToStart, activityToken: t.activity, activitySessionID: t.activitySessionID)
+        do { try await engine.saveDevice(row) }
+        catch { Self.log.error("device: \(error.localizedDescription, privacy: .public)") }
+    }
+
+    private func reconcileLive() async {
+        let run = running
+        var project: Project?
+        if let pid = run?.projectID {
+            project = (try? ctx.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == pid })))?.first
+        }
+        let task = run?.firstTaskID.flatMap { id in project?.tasks.first { $0.id == id } }
+        await live.reconcile(running: run, projectName: project?.name, taskTitle: task?.title, now: .now)
     }
 
     func parseTasks(_ transcript: String, projects: [Project]) async throws -> [ParsedTask] {
@@ -197,6 +227,7 @@ final class PhoneSync {
                 apply(week: rows, running: run, now: .now)
                 lastSync = .now; lastError = nil
                 publish()
+                await reconcileLive()
             } catch {
                 guard gen == generation else { return }
                 lastError = error.localizedDescription

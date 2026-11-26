@@ -40,6 +40,8 @@
 	<string>Stint listens while you dictate tasks. Audio stays on this device.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Stint turns your dictation into text on this device, then into a task list.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>StintSupabaseAnonKey</key>
 	<string>$(STINT_SUPABASE_ANON_KEY)</string>
 	<key>StintSupabaseURL</key>
