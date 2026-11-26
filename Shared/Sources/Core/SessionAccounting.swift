@@ -93,3 +93,10 @@ public func sessionTotals(start: Date, end: Date, events: [SessionEvent]) -> Ses
 public func isComplete(_ totals: SessionTotals, plannedMin: Int) -> Bool {
     totals.activeSec >= plannedMin * 60
 }
+
+public extension SessionTotals {
+    static func + (l: SessionTotals, r: SessionTotals) -> SessionTotals {
+        SessionTotals(focusedSec: l.focusedSec + r.focusedSec, offtaskSec: l.offtaskSec + r.offtaskSec,
+                      breakSec: l.breakSec + r.breakSec, idleSec: l.idleSec + r.idleSec, sleepSec: l.sleepSec + r.sleepSec)
+    }
+}
