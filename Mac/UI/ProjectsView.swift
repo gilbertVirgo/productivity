@@ -64,6 +64,21 @@ private struct ProjectEditor: View {
                         }.buttonStyle(.plain)
                     }
                 }
+                GroupBox("Switching") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        IconPicker(selection: Binding(get: { project.icon }, set: { project.icon = $0; project.updatedAt = .now }),
+                                   colorHex: project.colorHex)
+                        HStack {
+                            Text("Short name")
+                            TextField(String(project.name.prefix(12)), text: Binding(
+                                get: { project.shortName ?? "" },
+                                set: { project.shortName = $0.isEmpty ? nil : $0; project.updatedAt = .now })).frame(width: 160)
+                        }
+                        Toggle("Off-Mac work", isOn: edit(\.offMac))
+                        Text("Idle and off-task checks are off while this project is current.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
+                }
                 goals
                 appsSection
                 sitesSection
@@ -101,14 +116,6 @@ private struct ProjectEditor: View {
                                 project.dailyGoalDays = d.sorted(); project.updatedAt = .now
                             })).toggleStyle(.button)
                     }
-                }
-                HStack {
-                    GoalField(label: "Tasks done", initial: project.tasksGoal.map { "\($0)" } ?? "", wholeNumber: true) { v in
-                        project.tasksGoal = v.map { Int($0) }; project.updatedAt = .now
-                    }
-                    Picker("Period", selection: edit(\.tasksGoalPeriod)) {
-                        Text("per day").tag("day"); Text("per week").tag("week")
-                    }.labelsHidden().frame(width: 100)
                 }
             }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
         }
