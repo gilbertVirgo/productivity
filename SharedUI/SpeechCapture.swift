@@ -9,9 +9,12 @@ import Core
 final class SpeechCapture {
     enum Mode: Equatable { case idle, recording, finishing, unavailable(String) }
     var mode: Mode = .idle
-    var transcript = ""
-    /// Editing, recording and parsing are allowed only when no take is in flight.
-    var canEdit: Bool { if case .idle = mode { true } else if case .unavailable = mode { true } else { false } }
+    /// Mic loudness, 0…1, for the listening orb.
+    var level: Float = 0
+    /// The take's transcript so far (text from before the take, then everything heard).
+    @ObservationIgnored var onText: ((String) -> Void)?
+    /// The take ended by Stop, the recognizer finishing, or the Stop timeout. Not called after `cancel()`.
+    @ObservationIgnored var onEnded: (() -> Void)?
 
     @ObservationIgnored private var audio: AVAudioEngine?
     @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
@@ -20,7 +23,7 @@ final class SpeechCapture {
     @ObservationIgnored private var starting = false
     @ObservationIgnored private var abandoned = false
 
-    func start() async {
+    func start(base: String) async {
         guard !starting, mode != .recording, mode != .finishing else { return }
         abandoned = false
         starting = true; defer { starting = false }
@@ -49,7 +52,9 @@ final class SpeechCapture {
             mode = .unavailable("No microphone available. Type your tasks instead.")
             return
         }
-        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tap(req))
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tap(req) { [weak self] v in
+            Task { @MainActor in self?.level = v }
+        })
         do { engine.prepare(); try engine.start() } catch {
             input.removeTap(onBus: 0)
             req.endAudio()
@@ -58,15 +63,15 @@ final class SpeechCapture {
             return
         }
         audio = engine
-        var text = TranscriptAccumulator(base: transcript) // keep what was there before this take
+        var text = TranscriptAccumulator(base: base) // keep what was there before this take
         request = req
         mode = .recording
         take += 1
         let myTake = take
         task = recognizer.recognitionTask(with: req, resultHandler: Self.handler { [weak self] result, segmentEnded, done in
             guard let self, myTake == self.take else { return }
-            if let result { text.add(result, segmentEnded: segmentEnded); self.transcript = text.text }
-            if done { self.finish() }
+            if let result { text.add(result, segmentEnded: segmentEnded); self.onText?(text.text) }
+            if done { self.finish(notify: true) }
         })
     }
 
@@ -80,7 +85,7 @@ final class SpeechCapture {
         let myTake = take
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(2))
-            if let self, self.take == myTake, self.mode == .finishing { self.finish() }
+            if let self, self.take == myTake, self.mode == .finishing { self.finish(notify: true) }
         }
     }
 
@@ -88,7 +93,7 @@ final class SpeechCapture {
     func cancel() {
         if starting { abandoned = true }
         guard mode == .recording || mode == .finishing else { return }
-        finish() // stops audio and drops late callbacks
+        finish(notify: false) // stops audio and drops late callbacks
     }
 
     private func stopAudio() {
@@ -98,13 +103,15 @@ final class SpeechCapture {
     }
 
     /// Also reached when the recognizer ends on its own mid-recording, so it stops the mic too.
-    private func finish() {
+    private func finish(notify: Bool) {
         stopAudio()
         take += 1 // the cancel below fires one more callback; drop it
         task?.cancel()
         task = nil; request = nil
+        level = 0
         mode = .idle
         deactivateSession()
+        if notify { onEnded?() }
     }
 
     private func deactivateSession() {
@@ -115,8 +122,19 @@ final class SpeechCapture {
 
     // MARK: off-main callbacks
 
-    nonisolated private static func tap(_ req: SFSpeechAudioBufferRecognitionRequest) -> AVAudioNodeTapBlock {
-        { buffer, _ in req.append(buffer) }
+    nonisolated private static func tap(_ req: SFSpeechAudioBufferRecognitionRequest,
+                                        level: @escaping @Sendable (Float) -> Void) -> AVAudioNodeTapBlock {
+        { buffer, _ in req.append(buffer); level(Self.level(buffer)) }
+    }
+
+    /// RMS mapped from -50…-10 dBFS to 0…1.
+    nonisolated static func level(_ buffer: AVAudioPCMBuffer) -> Float {
+        guard let ch = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return 0 }
+        let n = Int(buffer.frameLength)
+        var sum: Float = 0
+        for i in 0..<n { sum += ch[i] * ch[i] }
+        let db = 20 * log10(max((sum / Float(n)).squareRoot(), 1e-6))
+        return min(1, max(0, (db + 50) / 40))
     }
 
     /// `update(text, segmentEnded, done)`. Each result's text may cover only the current segment;
