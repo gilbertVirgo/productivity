@@ -15,14 +15,18 @@ import StintData
         app.onLive = { got.append($0) }
 
         app.switchTo(a)
-        #expect(got.last?.event == .start && got.last?.contentState.projectName == "Northwind")
+        let first = try #require(got.first)
+        #expect(first.event == .start && first.contentState.projectName == "Northwind")
+        #expect(first.attributes == LiveSessionInfo(sessionID: first.sessionID.uuidString))
         app.takeBreak()
         #expect(got.last?.event == .update && got.last?.contentState.status == .onBreak)
         app.resume()
         #expect(got.last?.event == .update && got.last?.contentState.countFrom != nil)
         app.switchTo(b)
         #expect(got.last?.event == .update && got.last?.contentState.projectName == "CHL")
+        let lastID = try #require(app.record?.id)
         app.stop()
+        #expect(got.last?.sessionID == lastID)
         #expect(got.last?.event == .end && got.last?.contentState.status == .ended)
         #expect(got.filter { $0.event == .start }.count == 1)
         _ = c

@@ -130,4 +130,19 @@ import Testing
         #expect(t.engine?.startedAt == midnight)
         #expect(!(t.engine?.events.contains { $0.type == .offtaskStart && $0.at == midnight } ?? false))
     }
+
+    @Test func aPermanentAllowSurvivesTheMidnightSplit() {
+        var t = Tracker(calendar: utc)
+        let late = ISO8601DateFormatter().date(from: "2026-11-26T23:50:00Z")!
+        let midnight = ISO8601DateFormatter().date(from: "2026-11-27T00:00:00Z")!
+        _ = t.switchTo(a, at: late)
+        _ = t.observe(bundleID: "com.spotify.client", host: nil, at: late + 10)
+        _ = t.tick(at: late + 30) // past the grace: off task
+        #expect(t.isOffTask)
+        #expect(t.allowCurrent(at: late + 31) != nil)
+        _ = t.tick(at: midnight + 1)
+        _ = t.observe(bundleID: "com.spotify.client", host: nil, at: midnight + 2)
+        let out = t.tick(at: midnight + 60)
+        #expect(!out.contains { if case .offTaskStarted = $0 { true } else { false } } && !t.isOffTask)
+    }
 }

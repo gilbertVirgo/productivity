@@ -18,6 +18,10 @@ import Foundation
         #expect(SessionCommand.parse(row("dance")) == nil)
         let w = SessionCommand.switchTo(projectID: id).wire
         #expect(w.kind == "switch" && w.payload == ["project_id": id.uuidString])
+        for c in [SessionCommand.switchTo(projectID: id), .stop, .breakStart, .breakEnd] {
+            let w = c.wire
+            #expect(SessionCommand.parse(row(w.kind, w.payload)) == c)
+        }
     }
 
     @MainActor @Test func outcomeAcceptedWhenRowGone() async {

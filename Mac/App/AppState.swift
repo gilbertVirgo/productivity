@@ -179,6 +179,8 @@ final class AppState {
         pushLive()
         // Once per apply, after the new stretch (if any) is open: a switch syncs both rows in one push.
         if closed { onSessionClosed?() }
+        // A midnight split can stop an off-Mac stretch without going through stop().
+        if !isTracking && timer != nil { stopMonitoring() }
     }
 
     private func liveState(at now: Date) -> LiveSessionState? {
@@ -208,6 +210,7 @@ final class AppState {
     }
 
     private func startMonitoring() {
+        guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
@@ -231,6 +234,15 @@ final class AppState {
     func observe(bundleID: String, host: String?) {
         run { $0.observe(bundleID: bundleID, host: host, at: .now) }
     }
+
+    /// Test hook: the 1 s timer's body, at a chosen time.
+    func tick(at when: Date) {
+        now = when
+        run(checkpoint: false) { $0.tick(at: when) }
+    }
+
+    /// Test hook: whether the 1 s timer and activity monitor are live.
+    var isMonitoring: Bool { timer != nil && monitor != nil }
 
     private func tick() {
         now = Date()

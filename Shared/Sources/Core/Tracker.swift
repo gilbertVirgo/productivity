@@ -120,6 +120,7 @@ public struct Tracker: Sendable {
     public mutating func allowCurrent(at now: Date) -> (AllowEntry, [Output])? {
         guard var e = engine, let (entry, signals) = e.allowCurrent(at: now) else { return nil }
         engine = e
+        project?.allowlist.entries.insert(entry) // so a midnight reopen keeps it
         return (entry, Self.map(signals))
     }
 

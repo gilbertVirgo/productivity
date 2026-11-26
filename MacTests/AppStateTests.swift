@@ -36,4 +36,20 @@ import StintData
         #expect(rows.prefix(2).allSatisfy { $0.endKind == "switched" } && rows[2].endedAt == nil)
         app.stop()
     }
+
+    @MainActor @Test func midnightStopOfAnOffMacProjectStopsMonitoring() throws {
+        let c = try ModelContainer(for: Schema(StintSchema.models), configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let books = Project(name: "Books"), b = Project(name: "B")
+        books.offMac = true
+        c.mainContext.insert(books); c.mainContext.insert(b); try c.mainContext.save()
+        let app = AppState(context: c.mainContext)
+        app.switchTo(books, at: Calendar.current.startOfDay(for: .now)) // started this morning
+        #expect(app.isTracking && app.isMonitoring)
+        app.tick(at: .now + 86400) // crosses midnight: the off-Mac stretch stops itself
+        #expect(!app.isTracking && !app.isMonitoring)
+        app.switchTo(b)
+        #expect(app.isTracking && app.isMonitoring)
+        app.stop()
+        #expect(!app.isMonitoring)
+    }
 }
