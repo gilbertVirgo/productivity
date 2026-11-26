@@ -273,13 +273,13 @@ final class PhoneSync {
 
     /// The Start widget's link. Signed out (or still resuming) it waits for sign-in rather than being dropped.
     func openStart(_ id: UUID) {
-        if userID == nil { pendingStart = id } else { Task { await send(.start(projectID: id, plannedMin: StartLink.plannedMin, firstTaskID: nil)) } }
+        if userID == nil { pendingStart = id } else { Task { await send(.switchTo(projectID: id)) } }
     }
 
     private func flushPendingStart() async {
         guard let id = pendingStart else { return }
         pendingStart = nil
-        await send(.start(projectID: id, plannedMin: StartLink.plannedMin, firstTaskID: nil))
+        await send(.switchTo(projectID: id))
     }
 
     func send(_ cmd: SessionCommand) async {

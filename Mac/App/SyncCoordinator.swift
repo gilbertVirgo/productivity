@@ -93,7 +93,7 @@ final class SyncCoordinator {
         }
         userID = user.id
         for id in app.recoveredSessionIDs {
-            sendLive(LivePush(event: .end, sessionID: id, attributes: nil, contentState: .ended(projectName: "", colorHex: "#8E8E93", icon: nil, focusedSec: 0)))
+            sendLive(LivePush(event: .end, sessionID: id, attributes: nil, contentState: .ended(projectName: "Stint", colorHex: "#8E8E93", icon: nil, focusedSec: 0)))
         }
         app.recoveredSessionIDs = []
         timer?.invalidate()
@@ -219,7 +219,7 @@ final class SyncCoordinator {
                     }
                     let cmd = SessionCommand.parse(row)
                     var done = cmd.map { Self.perform($0, on: app) } ?? false
-                    if !done, let cmd, case .start = cmd {
+                    if !done, let cmd, case .switchTo = cmd {
                         // The project may have been created on the phone moments ago: pull once and retry.
                         await syncNow()
                         // A pass already in flight only queues another; wait until the queued pass finishes.
@@ -231,7 +231,7 @@ final class SyncCoordinator {
                         try await engine.deleteCommand(row.id) // deleting is the acknowledgement
                     } else {
                         if cmd == nil { Self.log.error("unparseable command \(row.kind, privacy: .public)") }
-                        try await engine.rejectCommand(row.id, reason: Self.rejectionReason(cmd, isRunning: app.isRunning))
+                        try await engine.rejectCommand(row.id, reason: Self.rejectionReason(cmd, isTracking: app.isTracking))
                     }
                 }
             } catch { Self.log.error("commands: \(error.localizedDescription, privacy: .public)") }
@@ -260,28 +260,23 @@ final class SyncCoordinator {
     }
 
     /// What the phone shows when the Mac can't act on a command.
-    static func rejectionReason(_ cmd: SessionCommand?, isRunning: Bool) -> String {
+    static func rejectionReason(_ cmd: SessionCommand?, isTracking: Bool) -> String {
         switch cmd {
         case nil: "Your Mac couldn't read that request. Update Stint on both devices."
-        case .start: isRunning ? "A session is already running on your Mac." : "Your Mac doesn't have that project, or it's archived. If you just created it, try again in a minute."
-        case .takeBreak, .resume, .endEarly: "No session is running on your Mac."
+        case .legacy: "Update Stint on your phone."
+        case .switchTo: "Your Mac doesn't have that project, or it's archived. If you just created it, try again in a minute."
+        case .stop, .breakStart, .breakEnd: "Your Mac isn't tracking anything."
         }
     }
 
     /// True when the command was acted on.
     static func perform(_ cmd: SessionCommand, on app: AppState) -> Bool {
         switch cmd {
-        case let .start(projectID, plannedMin, firstTaskID):
-            return app.start(projectID: projectID, plannedMin: plannedMin, firstTaskID: firstTaskID)
-        case .takeBreak:
-            guard app.isRunning else { return false }
-            app.takeBreak(); return true
-        case .resume:
-            guard app.isRunning else { return false }
-            app.resume(); return true
-        case let .endEarly(reason):
-            guard app.isRunning else { return false }
-            app.endEarly(reason: reason); return !app.isRunning
+        case let .switchTo(id): return app.switchTo(projectID: id)
+        case .stop: guard app.isTracking else { return false }; app.stop(); return true
+        case .breakStart: guard app.isTracking else { return false }; app.takeBreak(); return true
+        case .breakEnd: guard app.isTracking else { return false }; app.resume(); return true
+        case .legacy: return false
         }
     }
 }

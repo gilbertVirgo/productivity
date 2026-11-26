@@ -21,7 +21,7 @@ struct TodayView: View {
         let stats = app.todayStats()
         let allowance = (UserDefaults.standard.object(forKey: "breakAllowanceMin") as? Int ?? 60) * 60
         let offtask = sessions.filter { $0.endedAt != nil && $0.startedAt >= day.start && $0.startedAt < day.end }
-            .reduce(0) { $0 + $1.offtaskSec } + (app.engine?.totals(at: now).offtaskSec ?? 0)
+            .reduce(0) { $0 + $1.offtaskSec } + (app.tracker.engine?.totals(at: now).offtaskSec ?? 0)
         let summaries = Ledger.summaries(ctx, since: week.start)
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -34,7 +34,6 @@ struct TodayView: View {
                         stat("Points today", "\(stats.points)")
                     }
                 }
-                startBar
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("This week").font(.title3.bold())
@@ -61,19 +60,6 @@ struct TodayView: View {
         }
     }
 
-    private var startBar: some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Start a session").font(.headline)
-                if app.isRunning {
-                    Text("Session running — \(app.remainingText) left").foregroundStyle(.secondary)
-                } else {
-                    StartSessionControls()
-                }
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
-        }
-    }
-
     private func stat(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading) {
             Text(value).font(.title2.monospacedDigit().bold())
@@ -83,7 +69,7 @@ struct TodayView: View {
 
     private func liveFocusedHours(_ p: Project, _ summaries: [SessionSummary], in interval: DateInterval) -> Double {
         var sec = focusedSec(summaries, projectID: p.id, in: interval)
-        if let e = app.engine, app.project?.id == p.id, e.startedAt >= interval.start, e.startedAt < interval.end {
+        if let e = app.tracker.engine, app.project?.id == p.id, e.startedAt >= interval.start, e.startedAt < interval.end {
             sec += e.totals(at: app.now).focusedSec
         }
         return Double(sec) / 3600

@@ -13,30 +13,22 @@ import StintData
         return (AppState(context: c.mainContext), p, c)
     }
 
-    @Test func startRunsThenIgnoredWhileRunning() throws {
+    @Test func switchStopAndBreakCommands() throws {
         let (app, p, keep) = try make(); defer { withExtendedLifetime(keep) {} }
-        #expect(SyncCoordinator.perform(.start(projectID: p.id, plannedMin: 25, firstTaskID: nil), on: app))
-        #expect(app.isRunning)
-        #expect(!SyncCoordinator.perform(.start(projectID: p.id, plannedMin: 25, firstTaskID: nil), on: app))
-        #expect(SyncCoordinator.perform(.endEarly(reason: "Client call"), on: app))
-        #expect(!app.isRunning)
-    }
-
-    @Test func endEarlyRecordsEarly() throws {
-        let (app, p, keep) = try make(); defer { withExtendedLifetime(keep) {} }
-        _ = SyncCoordinator.perform(.start(projectID: p.id, plannedMin: 25, firstTaskID: nil), on: app)
+        #expect(!SyncCoordinator.perform(.stop, on: app))
+        #expect(!SyncCoordinator.perform(.breakStart, on: app))
+        #expect(SyncCoordinator.perform(.switchTo(projectID: p.id), on: app))
+        #expect(app.isTracking && app.tracker.currentID == p.id)
+        #expect(SyncCoordinator.perform(.switchTo(projectID: p.id), on: app)) // already current: accepted, no-op
+        #expect(SyncCoordinator.perform(.breakStart, on: app) && app.tracker.onBreak)
+        #expect(SyncCoordinator.perform(.breakEnd, on: app) && !app.tracker.onBreak)
         let record = try #require(app.record)
-        _ = SyncCoordinator.perform(.endEarly(reason: "Client call"), on: app)
-        #expect(record.endKind == "early")
-    }
-
-    @Test func unknownProjectAndNoSession() throws {
-        let (app, p, keep) = try make(); defer { withExtendedLifetime(keep) {} }
-        #expect(!SyncCoordinator.perform(.start(projectID: UUID(), plannedMin: 25, firstTaskID: nil), on: app))
-        #expect(!SyncCoordinator.perform(.takeBreak, on: app))
-        #expect(!SyncCoordinator.perform(.resume, on: app))
+        #expect(SyncCoordinator.perform(.stop, on: app))
+        #expect(!app.isTracking && record.endKind == "stopped")
+        #expect(!SyncCoordinator.perform(.switchTo(projectID: UUID()), on: app))
+        #expect(!SyncCoordinator.perform(.legacy, on: app))
         p.archivedAt = .now
-        #expect(!SyncCoordinator.perform(.start(projectID: p.id, plannedMin: 25, firstTaskID: nil), on: app))
+        #expect(!SyncCoordinator.perform(.switchTo(projectID: p.id), on: app))
     }
 
     @Test func dispositionProtocol() {
@@ -71,10 +63,9 @@ import StintData
     }
 
     @Test func rejectionReasons() {
-        let start = SessionCommand.start(projectID: UUID(), plannedMin: 25, firstTaskID: nil)
-        #expect(SyncCoordinator.rejectionReason(start, isRunning: true) == "A session is already running on your Mac.")
-        #expect(SyncCoordinator.rejectionReason(start, isRunning: false) == "Your Mac doesn't have that project, or it's archived. If you just created it, try again in a minute.")
-        #expect(SyncCoordinator.rejectionReason(.takeBreak, isRunning: false) == "No session is running on your Mac.")
-        #expect(SyncCoordinator.rejectionReason(nil, isRunning: false) == "Your Mac couldn't read that request. Update Stint on both devices.")
+        #expect(SyncCoordinator.rejectionReason(.legacy, isTracking: false) == "Update Stint on your phone.")
+        #expect(SyncCoordinator.rejectionReason(.switchTo(projectID: UUID()), isTracking: false) == "Your Mac doesn't have that project, or it's archived. If you just created it, try again in a minute.")
+        #expect(SyncCoordinator.rejectionReason(.stop, isTracking: false) == "Your Mac isn't tracking anything.")
+        #expect(SyncCoordinator.rejectionReason(nil, isTracking: false) == "Your Mac couldn't read that request. Update Stint on both devices.")
     }
 }

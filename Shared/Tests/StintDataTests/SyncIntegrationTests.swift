@@ -142,9 +142,9 @@ struct SyncIntegrationTests {
         let prof: [ProfileRow] = try await client.from("profile").select().execute().value
         #expect(prof.first?.displayName == "")
 
-        let id = try await phone.sendCommand(.endEarly(reason: "Client call"), userID: uid)
+        let id = try await phone.sendCommand(.stop, userID: uid)
         let sent = try #require(try await phone.command(id))
-        #expect(SessionCommand.parse(sent) == .endEarly(reason: "Client call"))
+        #expect(SessionCommand.parse(sent) == .stop)
         #expect(sent.rejectedReason == nil)
         try await phone.rejectCommand(id, reason: "No session is running on your Mac.")
         #expect(try await phone.command(id)?.rejectedReason == "No session is running on your Mac.")

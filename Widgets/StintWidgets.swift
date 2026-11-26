@@ -75,7 +75,7 @@ struct StartWidget: Widget {
                         Text("Furthest behind").font(.caption).foregroundStyle(.secondary)
                         Text(l.name).font(.headline).lineLimit(2)
                         Spacer(minLength: 0)
-                        Label("Start \(StartLink.plannedMin) min", systemImage: "play.fill").font(.caption.bold())
+                        Label("Switch", systemImage: "arrow.left.arrow.right").font(.caption.bold())
                             .foregroundStyle(Color(hex: l.colorHex))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

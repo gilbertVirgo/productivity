@@ -26,3 +26,6 @@ func remainingText(_ sec: Int) -> String {
 
 /// "3.5" (hours, one decimal) from seconds.
 func hours(_ sec: Int) -> String { String(format: "%.1f", Double(sec) / 3600) }
+
+/// "1:42": hours and minutes, for time-on-project labels.
+func hoursMinutes(_ sec: Int) -> String { String(format: "%d:%02d", max(0, sec) / 3600, max(0, sec) / 60 % 60) }

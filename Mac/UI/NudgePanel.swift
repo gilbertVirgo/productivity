@@ -50,18 +50,17 @@ struct NudgeView: View {
     var body: some View {
         if let n = app.nudge {
             let name = n.host ?? appName(n.bundleID)
-            let left = app.engine.map { remainingText($0.remainingSec(at: app.now)) } ?? ""
             VStack(alignment: .leading, spacing: 10) {
-                Text("\(name) isn't on this session's list").font(.headline)
-                Text("\(app.project?.name ?? "") · \(left) left. Off-task time doesn't count toward your goal and costs \(-PointRules.perOfftaskMinute) points a minute.")
+                Text("\(name) isn't on \(app.project?.name ?? "this project")'s list").font(.headline)
+                Text("Off-task time doesn't count toward your goal and costs \(-PointRules.perOfftaskMinute) points a minute.")
                     .font(.callout).foregroundStyle(.secondary)
                 Text(offTaskLine(elapsedSec: Int(app.now.timeIntervalSince(n.startedAt))))
                     .font(.callout.monospacedDigit()).foregroundStyle(Theme.warn)
                 TextField("What are you doing here?", text: $reason).textFieldStyle(.roundedBorder)
                 HStack {
-                    Button("Back to \(app.engine?.lastOnTaskBundleID.map(appName) ?? "task")") { app.backToTask() }
+                    Button("Back to \(app.tracker.engine?.lastOnTaskBundleID.map(appName) ?? "work")") { app.backToTask() }
                         .buttonStyle(.borderedProminent)
-                    Button("It's work: allow for this session") { app.allowCurrent(reason: reason.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                    Button("It's work: allow for \(app.project?.menuTitle ?? "this project")") { app.allowCurrent(reason: reason.trimmingCharacters(in: .whitespacesAndNewlines)) }
                         .disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }

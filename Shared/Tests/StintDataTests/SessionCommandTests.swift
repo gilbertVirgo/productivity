@@ -7,37 +7,17 @@ import Foundation
         SessionCommandRow(id: UUID(), userID: UUID(), createdAt: .now, kind: kind, payload: p)
     }
 
-    @Test func parsesAllKinds() {
-        let p = UUID(), t = UUID()
-        #expect(SessionCommand.parse(row("start", ["project_id": p.uuidString, "planned_min": "45", "first_task_id": t.uuidString]))
-                == .start(projectID: p, plannedMin: 45, firstTaskID: t))
-        #expect(SessionCommand.parse(row("start", ["project_id": p.uuidString, "planned_min": "45"]))
-                == .start(projectID: p, plannedMin: 45, firstTaskID: nil))
-        #expect(SessionCommand.parse(row("break")) == .takeBreak)
-        #expect(SessionCommand.parse(row("resume")) == .resume)
-        #expect(SessionCommand.parse(row("end_early_request", ["reason": " tired "])) == .endEarly(reason: "tired"))
-    }
-
-    @Test func rejectsBad() {
-        let p = UUID().uuidString
-        #expect(SessionCommand.parse(row("start", ["project_id": p])) == nil)
-        #expect(SessionCommand.parse(row("start", ["project_id": p, "planned_min": "x"])) == nil)
-        #expect(SessionCommand.parse(row("start", ["project_id": "nope", "planned_min": "5"])) == nil)
-        #expect(SessionCommand.parse(row("end_early_request", ["reason": "  "])) == nil)
-        #expect(SessionCommand.parse(row("end_early_request")) == nil)
+    @Test func parsesSwitchFirstKinds() {
+        let id = UUID()
+        #expect(SessionCommand.parse(row("switch", ["project_id": id.uuidString])) == .switchTo(projectID: id))
+        #expect(SessionCommand.parse(row("switch", ["project_id": "nope"])) == nil)
+        #expect(SessionCommand.parse(row("stop")) == .stop)
+        #expect(SessionCommand.parse(row("break_start")) == .breakStart)
+        #expect(SessionCommand.parse(row("break_end")) == .breakEnd)
+        for old in ["start", "break", "resume", "end_early_request"] { #expect(SessionCommand.parse(row(old)) == .legacy) }
         #expect(SessionCommand.parse(row("dance")) == nil)
-    }
-
-    @Test func wireRoundTrips() {
-        let cmds: [SessionCommand] = [
-            .start(projectID: UUID(), plannedMin: 50, firstTaskID: UUID()),
-            .start(projectID: UUID(), plannedMin: 25, firstTaskID: nil),
-            .takeBreak, .resume, .endEarly(reason: "Client call"),
-        ]
-        for c in cmds {
-            let w = c.wire
-            #expect(SessionCommand.parse(row(w.kind, w.payload)) == c)
-        }
+        let w = SessionCommand.switchTo(projectID: id).wire
+        #expect(w.kind == "switch" && w.payload == ["project_id": id.uuidString])
     }
 
     @MainActor @Test func outcomeAcceptedWhenRowGone() async {
@@ -76,7 +56,7 @@ import Foundation
         let r = try dec.decode(SessionCommandRow.self, from: Data(json.utf8))
         #expect(r.payload["planned_min"] == "25")
         #expect(r.payload["x"] == nil && r.payload["y"] == nil)
-        #expect(SessionCommand.parse(r) == .start(projectID: p, plannedMin: 25, firstTaskID: nil))
+        #expect(SessionCommand.parse(r) == .legacy)
         let arr = try dec.decode([SessionCommandRow].self, from: Data("[\(json)]".utf8))
         #expect(arr.count == 1)
     }

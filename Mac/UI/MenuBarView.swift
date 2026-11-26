@@ -6,77 +6,48 @@ import Core
 struct MenuBarLabel: View {
     @Environment(AppState.self) private var app
     var body: some View {
-        if app.isRunning { Text(app.remainingText).monospacedDigit() } else { Image(systemName: "timer") }
+        if let p = app.project {
+            if app.tracker.onBreak {
+                Text("Break \(app.todayStats().breakLeftSec / 60)m").monospacedDigit()
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: p.icon ?? "circle.fill")
+                    Text("\(p.menuTitle) \(hoursMinutes(app.focusedToday(p.id)))").monospacedDigit()
+                }
+            }
+        } else {
+            Image(systemName: "timer")
+        }
     }
 }
 
 struct MenuBarView: View {
     @Environment(AppState.self) private var app
     @Environment(\.openWindow) private var openWindow
-    @State private var endSheet = false
+    @Query(filter: #Predicate<Project> { $0.archivedAt == nil }, sort: \Project.name) private var projects: [Project]
 
     var body: some View {
-        // Inline, not .sheet: a sheet is its own window, and taking focus from the
-        // MenuBarExtra panel closes the panel (and the sheet with it) mid-click.
-        Group {
-            if endSheet && app.isRunning {
-                EndEarlySheet(onEnd: { app.endEarly(reason: $0); endSheet = false }, onCancel: { endSheet = false })
-            } else {
-                menu
-            }
-        }
-        .onChange(of: app.isRunning) { _, running in if !running { endSheet = false } }
-    }
-
-    private var menu: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let e = app.engine, let p = app.project { running(e, p) } else { idle }
-            Divider()
-            Button("Open Stint") { NSApp.activate(); openWindow(id: "main") }.buttonStyle(.plain)
-            Button("Quit") { NSApplication.shared.terminate(nil) }.buttonStyle(.plain)
-                .disabled(app.isRunning).help(app.isRunning ? "End the session first" : "")
-        }
-        .padding(14).frame(width: 300)
-    }
-
-    private var idle: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let r = app.lastResult {
-                Text(r.completed ? "Session complete · \(r.points >= 0 ? "+" : "")\(r.points) points"
-                                 : "Session ended · \(r.points >= 0 ? "+" : "")\(r.points) points").font(.callout)
-            }
-            Text("Start session").font(.headline)
-            StartSessionControls()
-        }
-    }
-
-    private func running(_ e: SessionEngine, _ p: Project) -> some View {
-        let total = Double(e.plannedMin * 60)
         let stats = app.todayStats()
-        return VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Circle().fill(Color(hex: p.colorHex)).frame(width: 9, height: 9)
-                Text(p.name).font(.headline)
+                Text("WORKING ON").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
-                Text("\(e.plannedMin) min session").font(.caption).foregroundStyle(.secondary)
+                Text("Today \(hoursMinutes(stats.focusedSec)) · \(stats.points >= 0 ? "+" : "")\(stats.points) pts")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            Text(app.remainingText).font(.system(size: 44, weight: .semibold).monospacedDigit())
-            ProgressView(value: min(total, total - Double(e.remainingSec(at: app.now))), total: total)
-            if let t = app.firstTask {
-                Text("Working on").font(.caption).foregroundStyle(.secondary)
-                Text(t.title)
+            if projects.isEmpty {
+                Text("Add a project in Stint to start tracking.").foregroundStyle(.secondary)
             }
-            FlowChips(items: e.allowlist.entries.map(\.value).sorted())
-            HStack {
-                stat("Focused", "\(stats.focusedSec / 60)m")
-                stat("Break left", "\(stats.breakLeftSec / 60)m")
-                stat("Points", "\(stats.points)")
+            VStack(spacing: 4) {
+                ForEach(Array(projects.prefix(9).enumerated()), id: \.element.id) { i, p in
+                    ProjectRowButton(project: p, number: i + 1)
+                }
             }
             if app.nudge != nil {
                 HStack {
                     Text("Off task").foregroundStyle(Theme.warn).bold()
                     Spacer()
-                    Button("Back to task") { app.backToTask() }
+                    Button("Back to work") { app.backToTask() }
                 }
                 .padding(8).background(Theme.warn.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
             }
@@ -84,25 +55,56 @@ struct MenuBarView: View {
                 Text("Site checks are off — allow Stint to control Safari/Chrome in System Settings › Privacy & Security › Automation")
                     .font(.caption).foregroundStyle(Theme.warn)
             }
+            Divider()
             HStack {
-                Button(e.onBreak ? "Resume" : "Take a break") { e.onBreak ? app.resume() : app.takeBreak() }
-                Button("End early…") { endSheet = true }
+                Button { app.tracker.onBreak ? app.resume() : app.takeBreak() } label: {
+                    VStack(spacing: 1) {
+                        Text(app.tracker.onBreak ? "Resume" : "Break").bold()
+                        Text("\(stats.breakLeftSec / 60) min left today").font(.caption2).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity)
+                }
+                Button(role: .destructive) { app.stop() } label: { Text("Stop").bold().frame(maxWidth: .infinity) }
             }
+            .controlSize(.large)
+            .disabled(!app.isTracking)
+            HStack {
+                Spacer()
+                Button("Open Stint") { NSApp.activate(); openWindow(id: "main") }.buttonStyle(.link)
+                Button("Quit") { app.stop(); NSApplication.shared.terminate(nil) }.buttonStyle(.link)
+            }.font(.caption)
         }
-    }
-
-    private func stat(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading) {
-            Text(value).font(.callout.monospacedDigit()).bold()
-            Text(label).font(.caption2).foregroundStyle(.secondary)
-        }.frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14).frame(width: 340)
     }
 }
 
-private struct FlowChips: View {
-    let items: [String]
+/// One project row: a click switches to it (spec §6.2). Number keys 1–9 work while the panel is open.
+private struct ProjectRowButton: View {
+    @Environment(AppState.self) private var app
+    let project: Project
+    let number: Int
+
     var body: some View {
-        Text(items.joined(separator: " · "))
-            .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        let on = app.tracker.currentID == project.id
+        let tint = Color(hex: project.colorHex)
+        Button { app.switchTo(project) } label: {
+            HStack(spacing: 12) {
+                ProjectIcon(name: project.name, colorHex: project.colorHex, icon: project.icon, size: 32)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(project.name).font(.callout.weight(.semibold))
+                    if on { Text("Tracking now").font(.caption).foregroundStyle(.secondary) }
+                }
+                Spacer()
+                Text(hoursMinutes(app.focusedToday(project.id))).monospacedDigit().fontWeight(on ? .bold : .regular)
+                Text("\(number)").font(.caption2).foregroundStyle(.secondary)
+                    .padding(.horizontal, 5).overlay(RoundedRectangle(cornerRadius: 4).stroke(.secondary.opacity(0.5)))
+            }
+            .padding(.horizontal, 10).frame(minHeight: 48)
+            .background(on ? tint.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(on ? tint : .clear, lineWidth: 1.5))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut(KeyEquivalent(Character(String(number))), modifiers: [])
+        .accessibilityLabel("\(project.name), \(hoursMinutes(app.focusedToday(project.id))) today\(on ? ", tracking now" : "")")
     }
 }
