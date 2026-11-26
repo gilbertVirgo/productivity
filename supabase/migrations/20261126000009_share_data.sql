@@ -67,6 +67,7 @@ begin
     days := '[]';
     for d in select g::date from generate_series(wk, wk + 6, interval '1 day') g loop
       continue when not (extract(isodow from d)::smallint = any (p.daily_goal_days));
+      continue when d < (p.created_at at time zone tz)::date; -- like close_periods: no result before the project existed
       d0 := d::timestamp at time zone tz;
       d1 := (d + 1)::timestamp at time zone tz;
       day_elapsed := least(1, greatest(0, extract(epoch from p_now - d0) / extract(epoch from d1 - d0)));

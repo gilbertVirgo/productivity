@@ -1,5 +1,5 @@
 begin;
-select plan(18);
+select plan(19);
 
 -- GoalsTests port (Shared/Tests/CoreTests/GoalsTests.swift): Swift and SQL must agree.
 select is(public.goal_status(12, 12.4, 0.6, false), 'met', 'met before period ends');
@@ -68,6 +68,10 @@ select is((select string_agg((d ->> 'date') || '=' || (d ->> 'status'), ',')
 select is((select string_agg((r ->> 'period') || ':' || (r ->> 'period_start') || ':' || (r ->> 'met'), ',')
              from jsonb_array_elements(pg_temp.share() #> '{projects,0,last_week}') r),
   'week:2026-11-16:false,day:2026-11-20:true', 'last week from goal_result, this project only');
+
+update public.project set created_at = '2026-11-24 15:00+00' where id = '20000000-0000-0000-0000-000000000001';
+select is((select string_agg(d ->> 'date', ',') from jsonb_array_elements(pg_temp.share() #> '{projects,0,days}') d),
+  '2026-11-24,2026-11-25,2026-11-26,2026-11-27', 'no daily results before the project existed');
 
 select ok(has_function_privilege('anon', 'public.share_data(text)', 'execute'), 'anon can call share_data');
 select ok(not has_function_privilege('anon', 'public.share_data_at(text, timestamptz)', 'execute'), 'anon cannot pick the clock');
