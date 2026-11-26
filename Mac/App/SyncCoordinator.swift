@@ -114,16 +114,16 @@ final class SyncCoordinator {
     /// the phone's own foreground reconcile still shows the session.
     private func sendLive(_ push: LivePush) {
         guard let engine, userID != nil else { return }
-        let previous = livePushes
+        let previous = livePushes, gen = generation
         livePushes = Task {
             await previous?.value
+            guard gen == generation else { return } // signed out: cancel only reaches the tail, so check here
             do { try await engine.pushActivity(push) }
             catch { Self.log.notice("push-activity \(push.event.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)") }
         }
     }
 
     // MARK: sync
-
 
     func parseTasks(_ transcript: String, projects: [Project]) async throws -> [ParsedTask] {
         guard let engine, userID != nil else { throw NotSignedIn() }
