@@ -1,5 +1,7 @@
 # Freelance focus app — design
 
+> Sessions, ending early, planned length and the phone start flow (§6.3, §6.6, parts of §6.4–6.9) are superseded by `2026-11-26-switch-first-tracking-design.md`.
+
 Date: 2026-11-24
 Status: draft, awaiting review
 Artboard: https://claude.ai/artifact/7jLEB3FF9u9ocTp9XV8YCZ (9 screens; this spec is the source of truth where they differ)

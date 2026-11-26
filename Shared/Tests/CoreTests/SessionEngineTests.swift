@@ -7,17 +7,9 @@ import Foundation
     func at(_ s: Double) -> Date { t0.addingTimeInterval(s) }
     let figma = "com.figma.desktop", spotify = "com.spotify.client"
 
-    func engine(_ min: Int = 50) -> SessionEngine {
-        SessionEngine(plannedMin: min, startedAt: t0,
+    func engine() -> SessionEngine {
+        SessionEngine(startedAt: t0,
                       allowlist: Allowlist(entries: [AllowEntry(.app, figma), AllowEntry(.domain, "figma.com")], ownBundleID: "dev.stint.mac"))
-    }
-
-    @Test func signalsCompletionOnce() {
-        var e = engine()
-        _ = e.observe(bundleID: figma, host: nil, at: at(0))
-        #expect(e.tick(at: at(2999)).isEmpty)
-        #expect(e.tick(at: at(3000)) == [.reachedPlannedLength])
-        #expect(e.tick(at: at(3001)).isEmpty)
     }
 
     @Test func offTaskRecordedAsEvents() {
@@ -58,13 +50,6 @@ import Foundation
         #expect(e.events.isEmpty)
     }
 
-    @Test func remainingExcludesBreak() {
-        var e = engine()
-        _ = e.setBreak(true, at: at(600))
-        _ = e.setBreak(false, at: at(1200))
-        #expect(e.remainingSec(at: at(1800)) == 3000 - 1200)
-    }
-
     @Test func allowCurrentUsesDomainForBrowserElseApp() {
         var e = engine()
         _ = e.observe(bundleID: Browsers.safari, host: "www.youtube.com", at: at(0))
@@ -77,29 +62,13 @@ import Foundation
         #expect(e.allowAdded.count == 2)
     }
 
-    @Test func finishEarlyClosesOpenStatesNoBonus() {
+    @Test func closeEndsOpenStatesAtCloseTime() {
         var e = engine()
         _ = e.observe(bundleID: figma, host: nil, at: at(0))
         _ = e.setBreak(true, at: at(1200))
-        let r = e.finish(at: at(1500), early: true, breakUsedEarlierTodaySec: 0, allowanceSec: 3600)
-        #expect(!r.completed)
+        let r = e.close(at: at(1500))
         #expect(r.events.last == SessionEvent(.breakEnd, at: at(1500)))
         #expect(r.totals == SessionTotals(focusedSec: 1200, breakSec: 300))
-        #expect(r.points == [PointLine(kind: .focus, delta: 20)])
-    }
-
-    @Test func finishCompletedChargesBreakOverAllowance() {
-        var e = engine()
-        _ = e.observe(bundleID: figma, host: nil, at: at(0))
-        _ = e.setBreak(true, at: at(600))
-        _ = e.setBreak(false, at: at(600 + 1320))
-        let r = e.finish(at: at(3000 + 1320), early: false, breakUsedEarlierTodaySec: 3000, allowanceSec: 3600)
-        #expect(r.completed)
-        #expect(r.points == [
-            PointLine(kind: .focus, delta: 50),
-            PointLine(kind: .sessionComplete, delta: 10),
-            PointLine(kind: .breakOver, delta: -12),
-        ])
     }
 
     @Test func offtaskStartDetailIncludesDomain() {

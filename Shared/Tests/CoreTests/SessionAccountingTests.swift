@@ -9,7 +9,6 @@ import Foundation
     @Test func noEventsIsAllFocused() {
         let t = sessionTotals(start: start, end: at(50), events: [])
         #expect(t == SessionTotals(focusedSec: 3000))
-        #expect(t.activeSec == 3000)
     }
 
     @Test func offTaskStretch() {
@@ -24,8 +23,7 @@ import Foundation
             SessionEvent(.breakStart, at: at(20)), SessionEvent(.breakEnd, at: at(30)),
         ])
         #expect(t == SessionTotals(focusedSec: 3000, breakSec: 600))
-        #expect(t.activeSec == 3000)
-        #expect(isComplete(t, plannedMin: 50))
+        #expect(t.focusedSec + t.offtaskSec == 3000)
     }
 
     @Test func idleBeatsOffTask() {
@@ -62,24 +60,12 @@ import Foundation
         #expect(t == SessionTotals(focusedSec: 2700, offtaskSec: 300))
     }
 
-    @Test func incompleteWhenActiveShort() {
-        let t = sessionTotals(start: start, end: at(32), events: [])
-        #expect(!isComplete(t, plannedMin: 50))
-    }
-
     @Test func fractionalSecondsStillSumExactly() {
         let t = sessionTotals(start: start, end: start.addingTimeInterval(3000), events: [
             SessionEvent(.offtaskStart, at: start.addingTimeInterval(100.3)),
             SessionEvent(.offtaskEnd, at: start.addingTimeInterval(200.6)),
         ])
-        #expect(t.activeSec == 3000)
-        #expect(isComplete(t, plannedMin: 50))
-    }
-
-    @Test func exactlyPlannedLengthIsComplete() {
-        let t = sessionTotals(start: start, end: at(50), events: [])
-        #expect(t.activeSec == 3000)
-        #expect(isComplete(t, plannedMin: 50))
+        #expect(t.focusedSec + t.offtaskSec == 3000)
     }
 
     @Test func endBeforeStartIsEmpty() {

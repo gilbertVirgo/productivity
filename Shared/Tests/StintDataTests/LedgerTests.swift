@@ -19,24 +19,6 @@ import Core
         return p
     }
 
-    @Test func closeWritesTotalsAndPoints() throws {
-        let ctx = try makeCtx()
-        let p = project(ctx)
-        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
-        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
-        let result = SessionResult(
-            totals: SessionTotals(focusedSec: 3000), completed: true,
-            points: [PointLine(kind: .focus, delta: 50), PointLine(kind: .sessionComplete, delta: 10)],
-            events: [], allowAdded: [])
-        try Ledger.close(ctx, record: rec, result: result, endedAt: t0 + 3000, earlyReason: nil)
-        #expect(rec.endKind == "completed")
-        #expect(rec.focusedSec == 3000)
-        let pts = try ctx.fetch(FetchDescriptor<PointEvent>())
-        #expect(pts.count == 2)
-        #expect(pts.allSatisfy { $0.refID == rec.id })
-        #expect(Ledger.balance(ctx) == 60)
-    }
-
     @Test func redeemGuardsBalance() throws {
         let ctx = try makeCtx()
         ctx.insert(PointEvent(at: .now, delta: 100, kind: "focus", refID: nil, note: ""))
@@ -52,7 +34,7 @@ import Core
         let ctx = try makeCtx()
         let p = project(ctx)
         let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
-        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
+        let rec = try Ledger.openStretch(ctx, projectID: p.id, startedAt: t0)
         try Ledger.checkpoint(ctx, record: rec,
                           events: [SessionEvent(.offtaskStart, at: t0 + 600), SessionEvent(.offtaskEnd, at: t0 + 900)],
                           allowAdded: [], at: t0 + 1200)
@@ -92,7 +74,7 @@ import Core
         let ctx = try makeCtx()
         let p = project(ctx)
         let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
-        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
+        let rec = try Ledger.openStretch(ctx, projectID: p.id, startedAt: t0)
         try Ledger.checkpoint(ctx, record: rec, events: [], allowAdded: [], at: t0 + 1200)
         rec.syncedAt = rec.updatedAt
         #expect(!rec.isDirty)
@@ -101,29 +83,12 @@ import Core
         #expect(rec.isDirty)
     }
 
-    @Test func allowAddedKeptSeparateFromSnapshotAndPairedWithReasons() throws {
-        let ctx = try makeCtx()
-        let p = project(ctx)
-        let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
-        let base = AllowEntry(.app, "com.figma.desktop"), added = AllowEntry(.domain, "docs.example.com")
-        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [base])
-        let snapshot = rec.allowData
-        rec.allowReasons.append("needed docs")
-        try Ledger.checkpoint(ctx, record: rec, events: [], allowAdded: [added], at: t0 + 100)
-        let r = SessionResult(totals: SessionTotals(focusedSec: 100), completed: false, points: [], events: [], allowAdded: [added])
-        try Ledger.close(ctx, record: rec, result: r, endedAt: t0 + 100, earlyReason: "x")
-        #expect(rec.allowData == snapshot)
-        let got = try JSONDecoder().decode([AllowEntry].self, from: rec.allowAddedData)
-        #expect(got == [added])
-        #expect(rec.allowReasons.count == got.count)
-    }
-
     @Test func recoveryPreservesAllowAdded() throws {
         let ctx = try makeCtx()
         let p = project(ctx)
         let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
         let added = AllowEntry(.app, "com.spotify.client")
-        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 50, firstTask: nil, startedAt: t0, allow: [])
+        let rec = try Ledger.openStretch(ctx, projectID: p.id, startedAt: t0)
         rec.allowReasons.append("focus music")
         try Ledger.checkpoint(ctx, record: rec, events: [], allowAdded: [added], at: t0 + 100)
         try Ledger.recoverOrphans(ctx, now: t0 + 999)
@@ -135,10 +100,12 @@ import Core
         let ctx = try makeCtx()
         let p = project(ctx)
         let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
-        let a = try Ledger.openSession(ctx, project: p, plannedMin: 25, firstTask: nil, startedAt: t0, allow: [])
-        let r = SessionResult(totals: SessionTotals(focusedSec: 600), completed: false, points: [], events: [], allowAdded: [])
-        try Ledger.close(ctx, record: a, result: r, endedAt: t0 + 600, earlyReason: "x")
-        _ = try Ledger.openSession(ctx, project: p, plannedMin: 25, firstTask: nil, startedAt: t0 + 1000, allow: [])
+        let day = DateInterval(start: t0 - 3600, end: t0 + 86_400)
+        let a = try Ledger.openStretch(ctx, projectID: p.id, startedAt: t0)
+        let r = StretchResult(projectID: p.id, startedAt: t0, endedAt: t0 + 600, end: .switched, events: [],
+                              totals: SessionTotals(focusedSec: 600))
+        try Ledger.closeStretch(ctx, record: a, result: r, day: day, allowanceSec: 3600, now: t0 + 600)
+        _ = try Ledger.openStretch(ctx, projectID: p.id, startedAt: t0 + 1000)
         let s = Ledger.summaries(ctx, since: t0 - 1)
         #expect(s.count == 1)
         #expect(s[0].focusedSec == 600)
@@ -149,11 +116,12 @@ import Core
         let ctx = try makeCtx()
         let p = project(ctx)
         let t0 = Date(timeIntervalSinceReferenceDate: 1_000_000)
-        let rec = try Ledger.openSession(ctx, project: p, plannedMin: 25, firstTask: nil, startedAt: t0, allow: [])
-        let r = SessionResult(totals: SessionTotals(focusedSec: 600), completed: false,
-                              points: [PointLine(kind: .focus, delta: 10)], events: [], allowAdded: [])
-        try Ledger.close(ctx, record: rec, result: r, endedAt: t0 + 600, earlyReason: nil)
-        try Ledger.close(ctx, record: rec, result: r, endedAt: t0 + 700, earlyReason: nil)
+        let day = DateInterval(start: t0 - 3600, end: t0 + 86_400)
+        let rec = try Ledger.openStretch(ctx, projectID: p.id, startedAt: t0)
+        let r = StretchResult(projectID: p.id, startedAt: t0, endedAt: t0 + 600, end: .switched, events: [],
+                              totals: SessionTotals(focusedSec: 600))
+        try Ledger.closeStretch(ctx, record: rec, result: r, day: day, allowanceSec: 3600, now: t0 + 600)
+        try Ledger.closeStretch(ctx, record: rec, result: r, day: day, allowanceSec: 3600, now: t0 + 700)
         #expect(try ctx.fetch(FetchDescriptor<PointEvent>()).count == 1)
     }
 }

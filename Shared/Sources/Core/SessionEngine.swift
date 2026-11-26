@@ -6,27 +6,13 @@ public struct FrontApp: Equatable, Sendable {
     public init(bundleID: String, host: String?) { self.bundleID = bundleID; self.host = host }
 }
 
-public struct SessionResult: Sendable {
-    public var totals: SessionTotals
-    public var completed: Bool
-    public var points: [PointLine]
-    public var events: [SessionEvent]
-    public var allowAdded: [AllowEntry]
-
-    public init(totals: SessionTotals, completed: Bool, points: [PointLine], events: [SessionEvent], allowAdded: [AllowEntry]) {
-        self.totals = totals; self.completed = completed; self.points = points; self.events = events; self.allowAdded = allowAdded
-    }
-}
-
 /// Rules for one running session (spec 6.3–6.7). Pure: the caller feeds observations and clock ticks.
 public struct SessionEngine: Sendable {
     public enum Signal: Equatable, Sendable {
         case offTaskStarted(bundleID: String, host: String?)
         case offTaskEnded
-        case reachedPlannedLength
     }
 
-    public let plannedMin: Int?
     public let startedAt: Date
     public private(set) var events: [SessionEvent] = []
     public private(set) var onBreak = false
@@ -36,10 +22,8 @@ public struct SessionEngine: Sendable {
     public private(set) var lastOnTaskBundleID: String?
     public private(set) var allowAdded: [AllowEntry] = []
     var tracker: OffTaskTracker
-    var completionSignalled = false
 
-    public init(plannedMin: Int? = nil, startedAt: Date, allowlist: Allowlist) {
-        self.plannedMin = plannedMin
+    public init(startedAt: Date, allowlist: Allowlist) {
         self.startedAt = startedAt
         self.tracker = OffTaskTracker(allowlist: allowlist)
     }
@@ -54,12 +38,7 @@ public struct SessionEngine: Sendable {
     }
 
     public mutating func tick(at now: Date) -> [Signal] {
-        var signals = record(tracker.tick(at: now))
-        if let plannedMin, !completionSignalled && isComplete(totals(at: now), plannedMin: plannedMin) {
-            completionSignalled = true
-            signals.append(.reachedPlannedLength)
-        }
-        return signals
+        record(tracker.tick(at: now))
     }
 
     public mutating func setBreak(_ value: Bool, at now: Date) -> [Signal] {
@@ -107,23 +86,6 @@ public struct SessionEngine: Sendable {
 
     public func totals(at now: Date) -> SessionTotals {
         sessionTotals(start: startedAt, end: now, events: events)
-    }
-
-    public func remainingSec(at now: Date) -> Int {
-        max(0, (plannedMin ?? 0) * 60 - totals(at: now).activeSec)
-    }
-
-    public mutating func finish(at now: Date, early: Bool, breakUsedEarlierTodaySec: Int, allowanceSec: Int) -> SessionResult {
-        if tracker.isOffTask { events.append(SessionEvent(.offtaskEnd, at: now)) }
-        if onBreak { events.append(SessionEvent(.breakEnd, at: now)) }
-        if idle { events.append(SessionEvent(.idleEnd, at: now)) }
-        if asleep { events.append(SessionEvent(.wake, at: now)) }
-        let t = totals(at: now)
-        let completed = !early && (plannedMin.map { isComplete(t, plannedMin: $0) } ?? false)
-        let over = breakOverAllowance(usedEarlierSec: breakUsedEarlierTodaySec, sessionBreakSec: t.breakSec, allowanceSec: allowanceSec)
-        return SessionResult(totals: t, completed: completed,
-                             points: sessionPoints(totals: t, completed: completed, breakOverSec: over),
-                             events: events, allowAdded: allowAdded)
     }
 
     /// Ends the stretch at `now`: drops events after `now` (a backdated switch), closes open states,

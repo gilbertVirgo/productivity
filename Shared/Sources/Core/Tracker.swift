@@ -168,11 +168,10 @@ public struct Tracker: Sendable {
     }
 
     private static func map(_ signals: [SessionEngine.Signal]) -> [Output] {
-        signals.compactMap {
+        signals.map {
             switch $0 {
             case let .offTaskStarted(bundleID, host): .offTaskStarted(bundleID: bundleID, host: host)
             case .offTaskEnded: .offTaskEnded
-            case .reachedPlannedLength: nil // stretches have no planned length
             }
         }
     }

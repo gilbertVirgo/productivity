@@ -11,41 +11,11 @@ public enum Ledger {
     private static func enc<T: Encodable>(_ v: T) throws -> Data { try JSONEncoder().encode(v) }
     private static func dec<T: Decodable>(_ d: Data) -> [T] { (try? JSONDecoder().decode([T].self, from: d)) ?? [] }
 
-    public static func openSession(_ ctx: ModelContext, project: Project, plannedMin: Int, firstTask: TaskItem?,
-                            startedAt: Date, allow: [AllowEntry]) throws -> SessionRecord {
-        let r = SessionRecord(projectID: project.id, firstTaskID: firstTask?.id, plannedMin: plannedMin,
-                              startedAt: startedAt, allowData: try enc(allow))
-        ctx.insert(r)
-        try ctx.save()
-        return r
-    }
-
     public static func checkpoint(_ ctx: ModelContext, record: SessionRecord, events: [SessionEvent], allowAdded: [AllowEntry], at: Date) throws {
         let e = try enc(events), a = try enc(allowAdded)
         record.eventsData = e
         record.allowAddedData = a
         record.updatedAt = at
-        try ctx.save()
-    }
-
-    public static func close(_ ctx: ModelContext, record: SessionRecord, result: SessionResult, endedAt: Date, earlyReason: String?) throws {
-        guard record.endedAt == nil else { return }
-        let events = try enc(result.events)
-        let added = try enc(result.allowAdded)
-        let t = result.totals
-        record.focusedSec = t.focusedSec; record.offtaskSec = t.offtaskSec; record.breakSec = t.breakSec
-        record.idleSec = t.idleSec; record.sleepSec = t.sleepSec
-        record.endedAt = endedAt
-        record.endKind = result.completed ? "completed" : "early"
-        record.earlyReason = earlyReason
-        record.eventsData = events
-        record.allowAddedData = added
-        record.updatedAt = endedAt
-        record.syncedAt = nil // updatedAt may equal the last checkpoint's; force a push of the close
-        let note = projectName(ctx, record.projectID)
-        for l in result.points {
-            ctx.insert(PointEvent(at: endedAt, delta: l.delta, kind: l.kind.rawValue, refID: record.id, note: note))
-        }
         try ctx.save()
     }
 

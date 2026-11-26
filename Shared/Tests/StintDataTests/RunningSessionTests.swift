@@ -7,12 +7,11 @@ import Core
     let start = Date(timeIntervalSince1970: 1_800_000_000)
     func at(_ s: Int) -> Date { start.addingTimeInterval(TimeInterval(s)) }
     func make(_ events: [SessionEvent]) -> RunningSession {
-        RunningSession(id: UUID(), projectID: UUID(), firstTaskID: nil, plannedMin: 25, startedAt: start, lastSeen: at(600), events: events)
+        RunningSession(id: UUID(), projectID: UUID(), firstTaskID: nil, startedAt: start, lastSeen: at(600), events: events)
     }
 
-    @Test func countdownExcludesBreaks() {
+    @Test func summaryExcludesBreakFromFocus() {
         let r = make([SessionEvent(.breakStart, at: at(300)), SessionEvent(.breakEnd, at: at(420))])
-        #expect(r.remainingSec(at: at(600)) == 25 * 60 - 480)
         #expect(r.summary(at: at(600)).focusedSec == 480 && r.summary(at: at(600)).breakSec == 120)
         #expect(!r.onBreak)
     }
@@ -34,7 +33,7 @@ import Core
         let ev = { (t: String) in SessionEventRow(id: UUID(), userID: row.userID, sessionID: row.id, at: self.at(10), type: t) }
         let r = RunningSession(row: row, events: [ev("break_start"), ev("bogus")])
         #expect(r.events == [SessionEvent(.breakStart, at: at(10))])
-        #expect(r.lastSeen == at(30) && r.plannedMin == 50)
+        #expect(r.lastSeen == at(30))
     }
 
     @Test func totalsRowDecodesNullEnd() throws {

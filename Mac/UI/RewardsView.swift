@@ -66,7 +66,6 @@ struct RewardsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("How points work").font(.title3.bold())
             row("Each focused minute", PointRules.perFocusedMinute)
-            row("Session completed", PointRules.sessionComplete)
             row("Daily goal met", PointRules.dailyGoalMet)
             row("Weekly goal met", PointRules.weeklyGoalMet)
             row("Each off-task minute", PointRules.perOfftaskMinute)

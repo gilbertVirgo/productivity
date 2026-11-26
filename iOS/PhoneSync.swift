@@ -244,7 +244,10 @@ final class PhoneSync {
         let start = day.start, end = day.end
         let ledger = ((try? ctx.fetch(FetchDescriptor<PointEvent>(predicate: #Predicate { $0.at >= start && $0.at < end }))) ?? [])
             .reduce(0) { $0 + $1.delta }
-        let live = run.map { sessionPoints(totals: $0.totals(at: now), completed: false, breakOverSec: 0).reduce(0) { $0 + $1.delta } } ?? 0
+        let live = run.map { r -> Int in
+            let t = r.totals(at: now)
+            return t.focusedSec / 60 * PointRules.perFocusedMinute + t.offtaskSec / 60 * PointRules.perOfftaskMinute
+        } ?? 0
         snapshot = WidgetSnapshot.build(
             projects: projects.map { .init(id: $0.id, name: $0.name, colorHex: $0.colorHex, weeklyHoursGoal: $0.weeklyHoursGoal,
                                            dailyHoursGoal: $0.dailyHoursGoal, dailyGoalDays: $0.dailyGoalDays) },

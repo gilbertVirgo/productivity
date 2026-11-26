@@ -3,7 +3,6 @@ import Foundation
 /// Point values (spec 6.7). Tune here; plan 2's SQL period-close job mirrors the goal values.
 public enum PointRules {
     public static let perFocusedMinute = 1
-    public static let sessionComplete = 10
     public static let dailyGoalMet = 20
     public static let weeklyGoalMet = 100
     public static let perOfftaskMinute = -2
@@ -26,22 +25,6 @@ public struct PointLine: Equatable, Sendable {
         self.kind = kind
         self.delta = delta
     }
-}
-
-/// Seconds of this session's break that fall beyond today's allowance.
-public func breakOverAllowance(usedEarlierSec: Int, sessionBreakSec: Int, allowanceSec: Int) -> Int {
-    max(0, sessionBreakSec - max(0, allowanceSec - usedEarlierSec))
-}
-
-/// Ledger lines written when a session ends. Partial minutes round down; zero lines are omitted.
-public func sessionPoints(totals: SessionTotals, completed: Bool, breakOverSec: Int) -> [PointLine] {
-    let candidates: [PointLine] = [
-        PointLine(kind: .focus, delta: totals.focusedSec / 60 * PointRules.perFocusedMinute),
-        PointLine(kind: .sessionComplete, delta: completed ? PointRules.sessionComplete : 0),
-        PointLine(kind: .offtask, delta: totals.offtaskSec / 60 * PointRules.perOfftaskMinute),
-        PointLine(kind: .breakOver, delta: breakOverSec / 60 * PointRules.perOverBreakMinute),
-    ]
-    return candidates.filter { $0.delta != 0 }
 }
 
 public func canRedeem(cost: Int, balance: Int) -> Bool {

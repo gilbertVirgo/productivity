@@ -4,19 +4,18 @@ import Core
 /// The Mac's open session as the phone sees it: the server row plus its events, as of the Mac's last checkpoint.
 public struct RunningSession: Sendable, Equatable {
     public var id: UUID, projectID: UUID, firstTaskID: UUID?
-    public var plannedMin: Int
     public var startedAt: Date
     /// The row's `updated_at`: the Mac's last checkpoint (every ~15 s while running).
     public var lastSeen: Date
     public var events: [SessionEvent]
 
-    public init(id: UUID, projectID: UUID, firstTaskID: UUID?, plannedMin: Int, startedAt: Date, lastSeen: Date, events: [SessionEvent]) {
+    public init(id: UUID, projectID: UUID, firstTaskID: UUID?, startedAt: Date, lastSeen: Date, events: [SessionEvent]) {
         self.id = id; self.projectID = projectID; self.firstTaskID = firstTaskID
-        self.plannedMin = plannedMin; self.startedAt = startedAt; self.lastSeen = lastSeen; self.events = events
+        self.startedAt = startedAt; self.lastSeen = lastSeen; self.events = events
     }
 
     public init(row: SessionRow, events: [SessionEventRow]) {
-        self.init(id: row.id, projectID: row.projectID, firstTaskID: row.firstTaskID, plannedMin: row.plannedMin ?? 0,
+        self.init(id: row.id, projectID: row.projectID, firstTaskID: row.firstTaskID,
                   startedAt: row.startedAt, lastSeen: row.updatedAt,
                   events: events.compactMap { e in
                       SessionEventType(rawValue: e.type).map { SessionEvent($0, at: e.at, detail: e.detail.isEmpty ? nil : e.detail) }
@@ -24,8 +23,6 @@ public struct RunningSession: Sendable, Equatable {
     }
 
     public func totals(at now: Date) -> SessionTotals { sessionTotals(start: startedAt, end: now, events: events) }
-    /// Same rule as `SessionEngine.remainingSec`: breaks and sleep don't use up the planned length.
-    public func remainingSec(at now: Date) -> Int { max(0, plannedMin * 60 - totals(at: now).activeSec) }
     public func summary(at now: Date) -> SessionSummary {
         let t = totals(at: now)
         return SessionSummary(projectID: projectID, startedAt: startedAt, focusedSec: t.focusedSec, breakSec: t.breakSec)

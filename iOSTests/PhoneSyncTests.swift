@@ -45,7 +45,7 @@ import StintData
         let s = PhoneSync(context: c, defaults: defaults(), info: [:])
         let closed = SessionTotalsRow(sessionID: UUID(), projectID: p.id, startedAt: noon.addingTimeInterval(-7200),
                                       endedAt: noon.addingTimeInterval(-6000), focusedSec: 1200, breakSec: 0)
-        let run = RunningSession(id: UUID(), projectID: p.id, firstTaskID: nil, plannedMin: 25,
+        let run = RunningSession(id: UUID(), projectID: p.id, firstTaskID: nil,
                                  startedAt: noon.addingTimeInterval(-600), lastSeen: noon, events: [])
         s.apply(week: [closed], running: run, now: noon)
         let line = try #require(s.snapshot?.lines.first)

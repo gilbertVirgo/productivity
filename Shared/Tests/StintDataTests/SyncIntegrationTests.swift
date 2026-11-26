@@ -172,7 +172,7 @@ struct SyncIntegrationTests {
         #expect(rows.first { $0.sessionID == closed.id }?.focusedSec == 1500)
         #expect(rows.first { $0.sessionID == open.id }?.endedAt == nil)
         let run = try #require(try await phone.runningSession())
-        #expect(run.id == open.id && run.plannedMin == 50 && run.onBreak)
+        #expect(run.id == open.id && run.onBreak)
         try await client.auth.signOut()
     }
 

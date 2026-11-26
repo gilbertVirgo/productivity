@@ -27,9 +27,6 @@ public struct SessionTotals: Equatable, Sendable {
     public var idleSec: Int
     public var sleepSec: Int
 
-    /// Time that uses up the planned length: everything except breaks and sleep.
-    public var activeSec: Int { focusedSec + offtaskSec + idleSec }
-
     public init(focusedSec: Int = 0, offtaskSec: Int = 0, breakSec: Int = 0, idleSec: Int = 0, sleepSec: Int = 0) {
         self.focusedSec = focusedSec
         self.offtaskSec = offtaskSec
@@ -88,10 +85,6 @@ public func sessionTotals(start: Date, end: Date, events: [SessionEvent]) -> Ses
     }
     advance(to: end)
     return totals
-}
-
-public func isComplete(_ totals: SessionTotals, plannedMin: Int) -> Bool {
-    totals.activeSec >= plannedMin * 60
 }
 
 public extension SessionTotals {
