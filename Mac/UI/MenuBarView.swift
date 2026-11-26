@@ -16,6 +16,19 @@ struct MenuBarView: View {
     @State private var endSheet = false
 
     var body: some View {
+        // Inline, not .sheet: a sheet is its own window, and taking focus from the
+        // MenuBarExtra panel closes the panel (and the sheet with it) mid-click.
+        Group {
+            if endSheet && app.isRunning {
+                EndEarlySheet(onEnd: { app.endEarly(reason: $0); endSheet = false }, onCancel: { endSheet = false })
+            } else {
+                menu
+            }
+        }
+        .onChange(of: app.isRunning) { _, running in if !running { endSheet = false } }
+    }
+
+    private var menu: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let e = app.engine, let p = app.project { running(e, p) } else { idle }
             Divider()
@@ -24,10 +37,6 @@ struct MenuBarView: View {
                 .disabled(app.isRunning).help(app.isRunning ? "End the session first" : "")
         }
         .padding(14).frame(width: 300)
-        .onChange(of: app.isRunning) { _, running in if !running { endSheet = false } }
-        .sheet(isPresented: $endSheet) {
-            EndEarlySheet(onEnd: { app.endEarly(reason: $0); endSheet = false }, onCancel: { endSheet = false })
-        }
     }
 
     private var idle: some View {
