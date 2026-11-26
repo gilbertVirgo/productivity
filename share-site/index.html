@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>Stint</title>
+<style>
+  :root { --bg: #f6f5f2; --card: #fff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e4e2dc;
+          --met: #0f7b6c; --on: #2f6fd6; --behind: #b25b00; --missed: #b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --card: #20201e; --ink: #ecebe7; --muted: #9a9892; --line: #33322f;
+            --met: #3fb8a6; --on: #7aa7f0; --behind: #e39a4a; --missed: #ef7d74; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 20px 48px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; }
+  h2 { font-size: 19px; margin: 0 0 12px; }
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 8px; }
+  .goal { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .goal:first-of-type { border-top: 0; }
+  .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin: 2px 0 8px; }
+  .bar > span { display: block; height: 100%; background: currentColor; }
+  .days { display: flex; flex-wrap: wrap; gap: 8px; }
+  .day { flex: 1 1 64px; text-align: center; border: 1px solid var(--line); border-radius: 10px; padding: 8px 4px; font-size: 14px; }
+  .day b { display: block; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .met { color: var(--met); } .on_track { color: var(--on); } .behind { color: var(--behind); }
+  .missed { color: var(--missed); } .upcoming { color: var(--muted); }
+  .empty { text-align: center; padding: 80px 0; color: var(--muted); }
+</style>
+<script src="config.js"></script>
+</head>
+<body>
+<main id="app"><p class="empty">Loading…</p></main>
+<script>
+const STATUS = { met: "Met", on_track: "On track", behind: "Behind", missed: "Missed", upcoming: "—" };
+const app = document.getElementById("app");
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function message(text) { app.replaceChildren(el("p", "empty", text)); }
+function day(iso) { return new Date(iso + "T12:00:00Z"); }
+function fmt(d, opts) { return d.toLocaleDateString(undefined, { timeZone: "UTC", ...opts }); }
+function amount(kind, v) { return kind === "hours" ? `${Number(v).toFixed(1)} h` : `${v} ${v === 1 ? "task" : "tasks"}`; }
+function goalName(kind, period) { return `${kind === "hours" ? "Hours" : "Tasks"} ${period === "day" ? "that day" : "this week"}`; }
+
+function render(data) {
+  const name = data.display_name || "Stint";
+  const nodes = [
+    el("h1", null, `${name}'s week`),
+    el("p", "sub", `${fmt(day(data.week_start), { day: "numeric", month: "short" })} – ${fmt(day(data.week_end), { day: "numeric", month: "short" })}` +
+      (data.updated_at ? ` · updated ${new Date(data.updated_at).toLocaleString(undefined, { weekday: "short", hour: "numeric", minute: "2-digit" })}` : ""))
+  ];
+  if (!data.projects.length) nodes.push(el("p", "empty", "Nothing shared yet."));
+  for (const p of data.projects) {
+    const card = el("section", "card");
+    card.append(el("h2", null, p.alias));
+    for (const g of p.goals) {
+      const row = el("div", "goal");
+      row.append(el("span", null, `${goalName(g.kind, "week")}: ${amount(g.kind, g.actual)} of ${amount(g.kind, g.target)}`),
+                 el("span", g.status, STATUS[g.status]));
+      const bar = el("div", "bar " + g.status), fill = el("span");
+      fill.style.width = Math.min(100, (g.actual / g.target) * 100) + "%";
+      bar.append(fill);
+      card.append(row, bar);
+    }
+    if (p.days.length) {
+      card.append(el("h3", null, "Daily goals"));
+      const days = el("div", "days");
+      for (const d of p.days) {
+        const cell = el("div", "day " + d.status);
+        cell.append(el("b", null, fmt(day(d.date), { weekday: "short" })), document.createTextNode(STATUS[d.status]));
+        cell.title = d.actual == null ? "" : `${amount(d.kind, d.actual)} of ${amount(d.kind, d.target)}`;
+        days.append(cell);
+      }
+      card.append(days);
+    }
+    if (p.last_week.length) {
+      card.append(el("h3", null, "Last week"));
+      for (const r of p.last_week) {
+        const row = el("div", "goal");
+        const when = r.period === "week" ? goalName(r.kind, "week").replace("this week", "for the week")
+                                         : `${fmt(day(r.period_start), { weekday: "short" })} · ${goalName(r.kind, "day")}`;
+        row.append(el("span", null, `${when}: ${amount(r.kind, r.actual)} of ${amount(r.kind, r.target)}`),
+                   el("span", r.met ? "met" : "missed", r.met ? "Met" : "Missed"));
+        card.append(row);
+      }
+    }
+    nodes.push(card);
+  }
+  app.replaceChildren(...nodes);
+  document.title = `${name}'s week · Stint`;
+}
+
+const token = new URLSearchParams(location.search).get("t");
+if (!token) {
+  message("This link isn't active.");
+} else {
+  fetch(`${STINT.api}/rest/v1/rpc/share_data`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: STINT.key, Authorization: `Bearer ${STINT.key}` },
+    body: JSON.stringify({ p_token: token })
+  })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(data => data ? render(data) : message("This link isn't active."))
+    .catch(() => message("Couldn't load this page. Try again later."));
+}
+</script>
+</body>
+</html>

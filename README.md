@@ -51,3 +51,13 @@ supabase stop      # stop the stack
 ```
 
 The hosted project, and linking to it, come in plan 4.
+
+## Share page
+
+`share-site/` is the friends page: one static HTML file that calls `rpc/share_data`.
+
+- Local: run `python3 -m http.server 8787 --bind 127.0.0.1 --directory share-site`, then open `http://127.0.0.1:8787/?t=<token>`.
+  The Mac's Debug build makes links to this address.
+- Production: set `share-site/config.js` to the hosted project's URL and anon key, enable GitHub Pages
+  (Settings → Pages → Source: GitHub Actions), and push. The workflow publishes `share-site/` to
+  `https://gilbertvirgo.github.io/productivity/`.
