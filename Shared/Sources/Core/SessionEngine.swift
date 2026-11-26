@@ -130,10 +130,13 @@ public struct SessionEngine: Sendable {
     /// and returns what the ledger stores.
     public mutating func close(at now: Date) -> (events: [SessionEvent], totals: SessionTotals) {
         events.removeAll { $0.at > now }
-        if tracker.isOffTask { events.append(SessionEvent(.offtaskEnd, at: now)) }
-        if onBreak { events.append(SessionEvent(.breakEnd, at: now)) }
-        if idle { events.append(SessionEvent(.idleEnd, at: now)) }
-        if asleep { events.append(SessionEvent(.wake, at: now)) }
+        // Close what is open in the events we kept, not in the live flags (which may postdate `now`).
+        for (start, end) in [(SessionEventType.offtaskStart, SessionEventType.offtaskEnd), (.breakStart, .breakEnd),
+                             (.idleStart, .idleEnd), (.sleep, .wake)] {
+            let s = events.lastIndex { $0.type == start }
+            let e = events.lastIndex { $0.type == end }
+            if let s, e.map({ $0 < s }) ?? true { events.append(SessionEvent(end, at: now)) }
+        }
         return (events, totals(at: now))
     }
 

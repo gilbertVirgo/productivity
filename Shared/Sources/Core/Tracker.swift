@@ -53,8 +53,8 @@ public struct Tracker: Sendable {
 
     /// Switches to `p` at `now`, or at the current stretch's start if `now` is earlier. Starts tracking when stopped.
     public mutating func switchTo(_ p: TrackedProject, at now: Date) -> [Output] {
-        guard p.id != project?.id else { return [] }
-        var out: [Output] = []
+        var out = splitAtMidnight(before: now)
+        guard p.id != project?.id else { return out }
         var start = now
         if let old = project, var e = engine {
             start = max(now, e.startedAt)
@@ -68,6 +68,10 @@ public struct Tracker: Sendable {
     }
 
     public mutating func stop(at now: Date) -> [Output] {
+        splitAtMidnight(before: now) + stopNow(at: now)
+    }
+
+    private mutating func stopNow(at now: Date) -> [Output] {
         guard let p = project, var e = engine else { return [] }
         var out: [Output] = e.isOffTask ? [.offTaskEnded] : []
         out.append(.ended(Self.close(&e, p, at: max(now, e.startedAt), .stopped)))
@@ -77,60 +81,71 @@ public struct Tracker: Sendable {
     }
 
     public mutating func setBreak(_ on: Bool, at now: Date) -> [Output] {
-        guard var e = engine else { return [] }
+        let split = splitAtMidnight(before: now)
+        guard var e = engine else { return split }
         let out = Self.map(e.setBreak(on, at: now))
         engine = e
-        return out
+        return split + out
     }
 
     public mutating func observe(bundleID: String, host: String?, at now: Date) -> [Output] {
         front = FrontApp(bundleID: bundleID, host: host)
-        guard var e = engine, project?.offMac == false else { return [] }
+        let split = splitAtMidnight(before: now)
+        guard var e = engine, project?.offMac == false else { return split }
         let out = Self.map(e.observe(bundleID: bundleID, host: host, at: now))
         engine = e
-        return out
+        return split + out
     }
 
     public mutating func setIdle(_ v: Bool, at now: Date) -> [Output] {
+        let split = splitAtMidnight(before: now)
         idle = v
-        guard var e = engine, project?.offMac == false else { return [] }
+        guard var e = engine, project?.offMac == false else { return split }
         let out = Self.map(e.setIdle(v, at: now))
         engine = e
-        return out
+        return split + out
     }
 
     public mutating func setAsleep(_ v: Bool, at now: Date) -> [Output] {
+        let split = splitAtMidnight(before: now)
         asleep = v
-        guard var e = engine, project?.offMac == false else { return [] }
+        guard var e = engine, project?.offMac == false else { return split }
         let out = Self.map(e.setAsleep(v, at: now))
         engine = e
-        return out
+        return split + out
     }
 
     /// "It's work: allow": allows what's in front for the rest of this stretch. The caller makes it permanent.
     public mutating func allowCurrent(at now: Date) -> (AllowEntry, [Output])? {
+        let split = splitAtMidnight(before: now)
         guard var e = engine, let (entry, signals) = e.allowCurrent(at: now) else { return nil }
         engine = e
-        return (entry, Self.map(signals))
+        return (entry, split + Self.map(signals))
     }
 
     /// Clock tick: the midnight split (§5.2), then the engine's grace timers.
     public mutating func tick(at now: Date) -> [Output] {
+        var out = splitAtMidnight(before: now)
+        if var e = engine, project?.offMac == false {
+            out += Self.map(e.tick(at: now))
+            engine = e
+        }
+        return out
+    }
+
+    /// The midnight split (§5.2). Runs before every input so a night is never misplaced by a late tick.
+    private mutating func splitAtMidnight(before now: Date) -> [Output] {
         var out: [Output] = []
         while let p = project, var e = engine {
             let midnight = calendar.dayInterval(containing: e.startedAt).end
             guard now >= midnight else { break }
-            if p.offMac { out += stop(at: midnight); break }
+            if p.offMac { out += stopNow(at: midnight); break }
             let wasOnBreak = e.onBreak
             if e.isOffTask { out.append(.offTaskEnded) }
             out.append(.ended(Self.close(&e, p, at: midnight, .switched)))
             open(p, at: midnight)
             if wasOnBreak { _ = engine?.setBreak(true, at: midnight) } // a break carries over midnight
             out.append(.started(projectID: p.id, at: midnight))
-        }
-        if var e = engine, project?.offMac == false {
-            out += Self.map(e.tick(at: now))
-            engine = e
         }
         return out
     }

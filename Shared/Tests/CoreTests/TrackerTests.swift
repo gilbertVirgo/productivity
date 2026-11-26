@@ -90,5 +90,34 @@ import Testing
         #expect(r[0].events.allSatisfy { $0.at <= t0 + 100 })
         #expect(r[0].totals.offtaskSec == 0)
         #expect(t.engine?.startedAt == t0 + 100 && !t.isOffTask)
+        for (start, end) in [(SessionEventType.offtaskStart, SessionEventType.offtaskEnd), (.breakStart, .breakEnd), (.idleStart, .idleEnd), (.sleep, .wake)] {
+            let ev = r[0].events
+            for (i, e) in ev.enumerated() where e.type == end { #expect(ev[..<i].contains { $0.type == start }) }
+        }
+    }
+
+    @Test func sleepingThroughMidnightKeepsTheNightOutOfFocus() {
+        var t = Tracker(calendar: utc)
+        let late = ISO8601DateFormatter().date(from: "2026-11-26T23:00:00Z")!
+        let midnight = ISO8601DateFormatter().date(from: "2026-11-27T00:00:00Z")!
+        _ = t.switchTo(a, at: late)
+        _ = t.setAsleep(true, at: late)
+        let wake = t.setAsleep(false, at: midnight + 8 * 3600)
+        #expect(ended(wake).first?.endedAt == midnight)
+        #expect(t.engine?.asleep == false && t.engine?.startedAt == midnight)
+        _ = t.tick(at: midnight + 8 * 3600 + 60)
+        #expect(t.engine?.totals(at: midnight + 8 * 3600 + 60).focusedSec == 60)
+    }
+
+    @Test func offMacStopsAtMidnightEvenWhenASwitchComesFirst() {
+        var t = Tracker(calendar: utc)
+        var books = a; books.offMac = true
+        let late = ISO8601DateFormatter().date(from: "2026-11-26T23:00:00Z")!
+        let midnight = ISO8601DateFormatter().date(from: "2026-11-27T00:00:00Z")!
+        _ = t.switchTo(books, at: late)
+        let out = t.switchTo(b, at: midnight + 8 * 3600)
+        let r = ended(out)
+        #expect(r.count == 1 && r[0].end == .stopped && r[0].endedAt == midnight)
+        #expect(t.currentID == b.id && t.engine?.startedAt == midnight + 8 * 3600)
     }
 }
