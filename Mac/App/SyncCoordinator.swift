@@ -23,6 +23,7 @@ final class SyncCoordinator {
     @ObservationIgnored private var userID: UUID?
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var debounce: Task<Void, Never>?
+    @ObservationIgnored private var livePushes: Task<Void, Never>?
     @ObservationIgnored private var syncing = false
     @ObservationIgnored private var syncAgain = false
     @ObservationIgnored private var handling = false
@@ -39,6 +40,7 @@ final class SyncCoordinator {
         }
         app.onCheckpoint = { [weak self] in self?.syncSoon() }
         app.onSessionClosed = { [weak self] in self?.syncSoon() }
+        app.onLive = { [weak self] in self?.sendLive($0) }
         Task { await resume() }
     }
 
@@ -71,6 +73,7 @@ final class SyncCoordinator {
         generation += 1
         timer?.invalidate(); timer = nil
         debounce?.cancel(); debounce = nil
+        livePushes?.cancel(); livePushes = nil
         userID = nil
         await engine?.stopRealtime()
         try? await client?.auth.signOut()
@@ -105,7 +108,22 @@ final class SyncCoordinator {
         await syncNow()
     }
 
+    // MARK: live activity
+
+    /// In order, one at a time: an update must never overtake its start. Failures (503 = no APNs key yet) are logged only;
+    /// the phone's own foreground reconcile still shows the session.
+    private func sendLive(_ push: LivePush) {
+        guard let engine, userID != nil else { return }
+        let previous = livePushes
+        livePushes = Task {
+            await previous?.value
+            do { try await engine.pushActivity(push) }
+            catch { Self.log.notice("push-activity \(push.event.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
     // MARK: sync
+
 
     func parseTasks(_ transcript: String, projects: [Project]) async throws -> [ParsedTask] {
         guard let engine, userID != nil else { throw NotSignedIn() }

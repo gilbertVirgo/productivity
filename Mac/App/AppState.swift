@@ -33,6 +33,15 @@ final class AppState {
     /// Sync hooks: fired after every checkpoint and after a session closes.
     @ObservationIgnored var onCheckpoint: (() -> Void)?
     @ObservationIgnored var onSessionClosed: (() -> Void)?
+    /// Live Activity hook (plan 7): .start once, .update when what the phone shows changes, .end on close.
+    @ObservationIgnored var onLive: ((LivePush) -> Void)?
+    @ObservationIgnored private var lastLive: LiveSessionState?
+
+    private func liveState(at now: Date) -> LiveSessionState? {
+        guard let e = engine else { return nil }
+        return .make(remainingSec: e.remainingSec(at: now), onBreak: e.onBreak, offTask: e.isOffTask,
+                     taskTitle: firstTask?.title, now: now)
+    }
 
     init(context: ModelContext) {
         ctx = context
@@ -77,6 +86,12 @@ final class AppState {
         }
         self.project = project; self.firstTask = firstTask
         engine = e; now = started; nudge = nil; lastResult = nil; automationDenied = false; ticks = 0
+        if let r = record, let s = liveState(at: started) {
+            lastLive = s
+            onLive?(LivePush(event: .start, sessionID: r.id,
+                             attributes: LiveSessionInfo(sessionID: r.id.uuidString, projectName: project.name, plannedMin: plannedMin),
+                             contentState: s))
+        }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
@@ -135,6 +150,10 @@ final class AppState {
             nudge = Nudge(bundleID: f.bundleID, host: f.host, startedAt: n.startedAt)
         }
         if stateChange || !signals.isEmpty { checkpoint() }
+        if let s = liveState(at: .now), let r = record, let last = lastLive, s.differs(from: last) {
+            lastLive = s
+            onLive?(LivePush(event: .update, sessionID: r.id, attributes: nil, contentState: s))
+        }
     }
 
     private func tick() {
@@ -178,6 +197,8 @@ final class AppState {
         let result = e.finish(at: end, early: early, breakUsedEarlierTodaySec: used, allowanceSec: allowanceSec)
         do { try Ledger.close(ctx, record: r, result: result, endedAt: end, earlyReason: reason) }
         catch { Self.log.error("close: \(error)") }
+        onLive?(LivePush(event: .end, sessionID: r.id, attributes: nil, contentState: .ended(taskTitle: firstTask?.title)))
+        lastLive = nil
         timer?.invalidate(); timer = nil
         monitor?.stop(); monitor = nil
         let total = result.points.reduce(0) { $0 + $1.delta }
