@@ -2,6 +2,7 @@ import Foundation
 import Speech
 import AVFoundation
 import Observation
+import Core
 
 /// On-device dictation. `unavailable` means: show the typed field instead (spec §6.8).
 @MainActor @Observable
@@ -57,14 +58,14 @@ final class SpeechCapture {
             return
         }
         audio = engine
-        let base = transcript.isEmpty ? "" : transcript + " " // keep what was there before this take
+        var text = TranscriptAccumulator(base: transcript) // keep what was there before this take
         request = req
         mode = .recording
         take += 1
         let myTake = take
-        task = recognizer.recognitionTask(with: req, resultHandler: Self.handler { [weak self] text, done in
+        task = recognizer.recognitionTask(with: req, resultHandler: Self.handler { [weak self] result, segmentEnded, done in
             guard let self, myTake == self.take else { return }
-            if let text { self.transcript = base + text }
+            if let result { text.add(result, segmentEnded: segmentEnded); self.transcript = text.text }
             if done { self.finish() }
         })
     }
@@ -118,12 +119,16 @@ final class SpeechCapture {
         { buffer, _ in req.append(buffer) }
     }
 
-    nonisolated private static func handler(_ update: @escaping @MainActor (String?, Bool) -> Void)
+    /// `update(text, segmentEnded, done)`. Each result's text may cover only the current segment;
+    /// `TranscriptAccumulator` stitches segments together.
+    nonisolated private static func handler(_ update: @escaping @MainActor (String?, Bool, Bool) -> Void)
         -> (SFSpeechRecognitionResult?, (any Error)?) -> Void {
         { result, error in
             let text = result?.bestTranscription.formattedString
-            let done = error != nil || (result?.isFinal ?? false)
-            Task { @MainActor in update(text, done) }
+            let isFinal = result?.isFinal ?? false
+            let segmentEnded = isFinal || result?.speechRecognitionMetadata != nil
+            let done = error != nil || isFinal
+            Task { @MainActor in update(text, segmentEnded, done) }
         }
     }
 
