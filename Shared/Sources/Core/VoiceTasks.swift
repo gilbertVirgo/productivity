@@ -22,7 +22,7 @@ public struct ParsedTask: Codable, Equatable, Sendable {
 
 /// A row on the confirm screen.
 public struct DraftTask: Identifiable, Equatable, Sendable {
-    public let id: UUID
+    public var id: UUID
     public var title: String
     public var projectID: UUID?
     public var estimateMin: Int?
