@@ -9,7 +9,8 @@ export type Deps = {
 };
 
 const EVENTS = ["start", "update", "end"];
-const HEX = /^[0-9a-fA-F]{4,200}$/;
+// Live Activity tokens are variable-length (a simulator push-to-start token is 256 hex chars); cap only to bound the URL.
+const HEX = /^[0-9a-fA-F]{4,1024}$/;
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
