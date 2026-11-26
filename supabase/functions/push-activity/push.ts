@@ -48,7 +48,10 @@ export async function handle(req: Request, deps: Deps | null): Promise<Response>
   }
   if (event === "end") aps["dismissal-date"] = now + 300;
 
-  const statuses = await Promise.all(tokens.map((t) => deps.send(t, { aps }).catch(() => 0)));
+  const statuses = await Promise.all(tokens.map((t) => deps.send(t, { aps }).catch((e) => {
+    console.error("apns send:", e instanceof Error ? e.message : e);
+    return 0;
+  })));
   const sent = statuses.filter((s) => s === 200).length;
   return json(200, { sent, failed: statuses.length - sent });
 }

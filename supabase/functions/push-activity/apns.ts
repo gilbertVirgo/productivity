@@ -4,13 +4,14 @@ export type ApnsConfig = { keyId: string; teamId: string; privateKey: string; to
 
 /** Token-based APNs auth (ES256). Apple wants the JWT reused for 20–60 min, so it's cached for 50. */
 export function apnsSender(cfg: ApnsConfig): (token: string, payload: unknown) => Promise<number> {
-  const key = importPKCS8(cfg.privateKey.replaceAll("\\n", "\n"), "ES256");
+  // Lazy: a malformed key must fail a send (counted as failed), not crash the worker at boot.
+  let key: ReturnType<typeof importPKCS8> | null = null;
   let cached: { jwt: string; at: number } | null = null;
   async function bearer(): Promise<string> {
     const now = Math.floor(Date.now() / 1000);
     if (cached && now - cached.at < 50 * 60) return cached.jwt;
     const jwt = await new SignJWT({}).setProtectedHeader({ alg: "ES256", kid: cfg.keyId })
-      .setIssuer(cfg.teamId).setIssuedAt(now).sign(await key);
+      .setIssuer(cfg.teamId).setIssuedAt(now).sign(await (key ??= importPKCS8(cfg.privateKey.replaceAll("\\n", "\n"), "ES256")));
     cached = { jwt, at: now };
     return jwt;
   }
