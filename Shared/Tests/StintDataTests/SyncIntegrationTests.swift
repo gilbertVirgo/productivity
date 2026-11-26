@@ -175,4 +175,26 @@ struct SyncIntegrationTests {
         #expect(run.id == open.id && run.plannedMin == 50 && run.onBreak)
         try await client.auth.signOut()
     }
+
+    @Test func shareLinkLifecycleAndPage() async throws {
+        let (client, _) = try await signedInClient()
+        let engine = SyncEngine(client: client, context: try ctx(), defaults: defaults())
+        let link = try await engine.createShareLink(label: "Sam")
+        #expect(link.token.count == 43 && link.friendLabel == "Sam")
+        #expect(try await engine.shareLinks().map(\.id) == [link.id])
+
+        // The page is anonymous: no session, anon key only.
+        let env = ProcessInfo.processInfo.environment
+        let anon = SupabaseClient(supabaseURL: URL(string: env["STINT_SUPABASE_URL"]!)!, supabaseKey: env["STINT_SUPABASE_ANON_KEY"]!,
+                                  options: .init(auth: .init(storage: MemoryStorage(), emitLocalSessionAsInitialSession: true)))
+        func page() async throws -> String {
+            String(decoding: try await anon.rpc("share_data", params: ["p_token": link.token]).execute().data, as: UTF8.self)
+        }
+        #expect(try await page().contains("\"projects\""))
+        #expect(!(try await page().contains("Sam")))
+
+        try await engine.revokeShareLink(id: link.id)
+        #expect(try await engine.shareLinks().isEmpty)
+        #expect(try await page() == "null")
+    }
 }
