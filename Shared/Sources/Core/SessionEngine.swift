@@ -26,7 +26,7 @@ public struct SessionEngine: Sendable {
         case reachedPlannedLength
     }
 
-    public let plannedMin: Int
+    public let plannedMin: Int?
     public let startedAt: Date
     public private(set) var events: [SessionEvent] = []
     public private(set) var onBreak = false
@@ -38,7 +38,7 @@ public struct SessionEngine: Sendable {
     var tracker: OffTaskTracker
     var completionSignalled = false
 
-    public init(plannedMin: Int, startedAt: Date, allowlist: Allowlist) {
+    public init(plannedMin: Int? = nil, startedAt: Date, allowlist: Allowlist) {
         self.plannedMin = plannedMin
         self.startedAt = startedAt
         self.tracker = OffTaskTracker(allowlist: allowlist)
@@ -55,7 +55,7 @@ public struct SessionEngine: Sendable {
 
     public mutating func tick(at now: Date) -> [Signal] {
         var signals = record(tracker.tick(at: now))
-        if !completionSignalled && isComplete(totals(at: now), plannedMin: plannedMin) {
+        if let plannedMin, !completionSignalled && isComplete(totals(at: now), plannedMin: plannedMin) {
             completionSignalled = true
             signals.append(.reachedPlannedLength)
         }
@@ -110,7 +110,7 @@ public struct SessionEngine: Sendable {
     }
 
     public func remainingSec(at now: Date) -> Int {
-        max(0, plannedMin * 60 - totals(at: now).activeSec)
+        max(0, (plannedMin ?? 0) * 60 - totals(at: now).activeSec)
     }
 
     public mutating func finish(at now: Date, early: Bool, breakUsedEarlierTodaySec: Int, allowanceSec: Int) -> SessionResult {
@@ -119,11 +119,22 @@ public struct SessionEngine: Sendable {
         if idle { events.append(SessionEvent(.idleEnd, at: now)) }
         if asleep { events.append(SessionEvent(.wake, at: now)) }
         let t = totals(at: now)
-        let completed = !early && isComplete(t, plannedMin: plannedMin)
+        let completed = !early && (plannedMin.map { isComplete(t, plannedMin: $0) } ?? false)
         let over = breakOverAllowance(usedEarlierSec: breakUsedEarlierTodaySec, sessionBreakSec: t.breakSec, allowanceSec: allowanceSec)
         return SessionResult(totals: t, completed: completed,
                              points: sessionPoints(totals: t, completed: completed, breakOverSec: over),
                              events: events, allowAdded: allowAdded)
+    }
+
+    /// Ends the stretch at `now`: drops events after `now` (a backdated switch), closes open states,
+    /// and returns what the ledger stores.
+    public mutating func close(at now: Date) -> (events: [SessionEvent], totals: SessionTotals) {
+        events.removeAll { $0.at > now }
+        if tracker.isOffTask { events.append(SessionEvent(.offtaskEnd, at: now)) }
+        if onBreak { events.append(SessionEvent(.breakEnd, at: now)) }
+        if idle { events.append(SessionEvent(.idleEnd, at: now)) }
+        if asleep { events.append(SessionEvent(.wake, at: now)) }
+        return (events, totals(at: now))
     }
 
     private mutating func resuspend(at now: Date) -> [Signal] {
