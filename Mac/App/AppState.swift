@@ -31,6 +31,7 @@ final class AppState {
         didSet { if nudge == nil { nudgePanel.hide() } else if oldValue == nil { nudgePanel.show(self) } }
     }
     var automationDenied = false
+    var hotkeyUnavailable = false
 
     @ObservationIgnored private let nudgePanel = NudgePanelController()
     @ObservationIgnored let ctx: ModelContext

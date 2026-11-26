@@ -68,6 +68,7 @@ struct MenuBarView: View {
             .controlSize(.large)
             .disabled(!app.isTracking)
             HStack {
+                Text(app.hotkeyUnavailable ? "Hotkey unavailable" : "Switch anywhere: ⌃⌥Space").foregroundStyle(.secondary)
                 Spacer()
                 Button("Open Stint") { NSApp.activate(); openWindow(id: "main") }.buttonStyle(.link)
                 Button("Quit") { app.stop(); NSApplication.shared.terminate(nil) }.buttonStyle(.link)

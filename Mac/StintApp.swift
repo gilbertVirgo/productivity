@@ -8,6 +8,8 @@ struct StintApp: App {
     let container: ModelContainer
     @State private var app: AppState
     @State private var sync: SyncCoordinator
+    let switcher = SwitcherController()
+    let hotkey: Hotkey
 
     init() {
         do {
@@ -21,6 +23,10 @@ struct StintApp: App {
         let state = AppState(context: container.mainContext)
         _app = State(initialValue: state)
         _sync = State(initialValue: SyncCoordinator(app: state, context: container.mainContext))
+        let switcher = self.switcher
+        hotkey = Hotkey { switcher.hotkeyPressed(state) }
+        hotkey.register()
+        state.hotkeyUnavailable = !hotkey.registered
     }
 
     var body: some Scene {
