@@ -20,10 +20,8 @@ final class NudgePanelController {
     private var panel: NSPanel?
     private let content: (AppState) -> AnyView
 
-    private let key: Bool
-
-    /// `key: false` for panels that appear on their own, so they never steal the keystrokes of the app in front.
-    init(key: Bool = true, content: @escaping (AppState) -> AnyView) { self.key = key; self.content = content }
+    /// Never made key: these panels appear on their own and mustn't steal the keystrokes of the app in front.
+    init(content: @escaping (AppState) -> AnyView) { self.content = content }
 
     var isShowing: Bool { panel != nil }
 
@@ -44,7 +42,6 @@ final class NudgePanelController {
             p.setFrameOrigin(NSPoint(x: f.maxX - p.frame.width - 16, y: f.maxY - p.frame.height - 16))
         }
         p.orderFrontRegardless()
-        if key { p.makeKey() }
         panel = p
     }
 
@@ -55,7 +52,6 @@ final class NudgePanelController {
 
 struct NudgeView: View {
     @Environment(AppState.self) private var app
-    @State private var reason = ""
 
     var body: some View {
         if let n = app.nudge {
@@ -66,12 +62,10 @@ struct NudgeView: View {
                     .font(.callout).foregroundStyle(.secondary)
                 Text(offTaskLine(elapsedSec: Int(app.now.timeIntervalSince(n.startedAt))))
                     .font(.callout.monospacedDigit()).foregroundStyle(Theme.warn)
-                TextField("What are you doing here?", text: $reason).textFieldStyle(.roundedBorder)
                 HStack {
                     Button("Back to \(app.tracker.engine?.lastOnTaskBundleID.map(appName) ?? "work")") { app.backToTask() }
                         .buttonStyle(.borderedProminent)
-                    Button("It's work: allow for \(app.project?.menuTitle ?? "this project")") { app.allowCurrent(reason: reason.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                        .disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("It's work: allow for \(app.project?.menuTitle ?? "this project")") { app.allowCurrent() }
                 }
             }
             .padding(16).frame(width: 340, alignment: .leading)

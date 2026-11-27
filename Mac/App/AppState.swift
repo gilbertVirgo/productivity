@@ -29,7 +29,7 @@ final class AppState {
     var hotkeyUnavailable = false
 
     @ObservationIgnored private let nudgePanel = NudgePanelController { AnyView(NudgeView().environment($0)) }
-    @ObservationIgnored private let suggestPanel = NudgePanelController(key: false) { AnyView(SuggestView().environment($0)) }
+    @ObservationIgnored private let suggestPanel = NudgePanelController { AnyView(SuggestView().environment($0)) }
     @ObservationIgnored private var suggester = SwitchSuggester()
     var suggestion: SwitchSuggester.Suggestion? { didSet { updateSuggestPanel() } }
     var undo: SwitchUndo? { didSet { updateSuggestPanel() } }
@@ -145,10 +145,10 @@ final class AppState {
     func resume() { run { $0.setBreak(false, at: .now) } }
 
     /// "It's work: allow": on-task now, and added to the project's allowlist for good (spec §5.4).
-    func allowCurrent(reason: String) {
+    func allowCurrent() {
         guard let p = project, let (entry, out) = tracker.allowCurrent(at: .now) else { return }
         if !p.allowEntries.contains(entry) {
-            let r = AllowRule(entry, label: reason)
+            let r = AllowRule(entry)
             ctx.insert(r); r.project = p; p.updatedAt = .now
             try? ctx.save()
         }
