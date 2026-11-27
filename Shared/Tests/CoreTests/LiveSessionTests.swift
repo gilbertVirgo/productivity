@@ -40,3 +40,13 @@ import Testing
         #expect(json.contains("\"projectName\":\"CHL\""))
     }
 }
+
+@Suite struct LiveSessionTaskTitleTests {
+    @Test func decodesWithoutTaskTitleAndDiffersOnIt() throws {
+        let old = ##"{"status":"focused","projectName":"A","colorHex":"#000000","countFrom":100,"focusedSec":5}"##
+        let s = try JSONDecoder().decode(LiveSessionState.self, from: Data(old.utf8))
+        #expect(s.taskTitle == nil)
+        var t = s; t.taskTitle = "Draft"
+        #expect(t.differs(from: s))
+    }
+}

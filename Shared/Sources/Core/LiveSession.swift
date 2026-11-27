@@ -12,19 +12,22 @@ public struct LiveSessionState: Codable, Hashable, Sendable {
     public var countFrom: Double?
     /// Focused seconds this stretch; shown as a still number when `countFrom` is nil.
     public var focusedSec: Int
+    /// The current card's title (spec 2026-11-27 §7). Optional so payloads from older Macs still decode.
+    public var taskTitle: String?
 
-    public init(status: Status, projectName: String, colorHex: String, icon: String?, countFrom: Double?, focusedSec: Int) {
+    public init(status: Status, projectName: String, colorHex: String, icon: String?, countFrom: Double?, focusedSec: Int,
+                taskTitle: String? = nil) {
         self.status = status; self.projectName = projectName; self.colorHex = colorHex; self.icon = icon
-        self.countFrom = countFrom; self.focusedSec = focusedSec
+        self.countFrom = countFrom; self.focusedSec = focusedSec; self.taskTitle = taskTitle
     }
 
     /// `paused` = idle or asleep.
     public static func make(projectName: String, colorHex: String, icon: String?, focusedSec: Int,
-                            onBreak: Bool, offTask: Bool, paused: Bool, now: Date) -> LiveSessionState {
+                            onBreak: Bool, offTask: Bool, paused: Bool, now: Date, taskTitle: String? = nil) -> LiveSessionState {
         let status: Status = onBreak ? .onBreak : paused ? .paused : offTask ? .offTask : .focused
         return LiveSessionState(status: status, projectName: projectName, colorHex: colorHex, icon: icon,
                                 countFrom: status == .focused ? (now.timeIntervalSince1970 - Double(focusedSec)).rounded() : nil,
-                                focusedSec: focusedSec)
+                                focusedSec: focusedSec, taskTitle: taskTitle)
     }
 
     public static func ended(projectName: String, colorHex: String, icon: String?, focusedSec: Int) -> LiveSessionState {
@@ -35,7 +38,7 @@ public struct LiveSessionState: Codable, Hashable, Sendable {
 
     /// Worth a push: anything visible changed, or the clock's start moved by more than 30 s.
     public func differs(from o: LiveSessionState) -> Bool {
-        if status != o.status || projectName != o.projectName || colorHex != o.colorHex || icon != o.icon { return true }
+        if status != o.status || projectName != o.projectName || colorHex != o.colorHex || icon != o.icon || taskTitle != o.taskTitle { return true }
         switch (countFrom, o.countFrom) {
         case let (a?, b?): return abs(a - b) > 30
         case (nil, nil): return false

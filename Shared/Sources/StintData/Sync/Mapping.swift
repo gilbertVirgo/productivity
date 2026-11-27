@@ -23,7 +23,8 @@ public enum Mapping {
     public static func row(_ t: TaskItem, userID: UUID) -> TaskRow? {
         guard let pid = t.project?.id else { return nil }
         return TaskRow(id: t.id, userID: userID, updatedAt: t.updatedAt, projectID: pid, title: t.title, estimateMin: t.estimateMin,
-                       estimateGuessed: t.estimateGuessed, doneAt: t.doneAt, source: t.source, sort: t.sort)
+                       estimateGuessed: t.estimateGuessed, doneAt: t.doneAt, source: t.source, sort: t.sort,
+                       activeAt: t.activeAt, currentAt: t.currentAt, deletedAt: t.deletedAt)
     }
 
     public static func row(_ t: Treat, userID: UUID) -> TreatRow {
@@ -83,6 +84,8 @@ public enum Mapping {
         guard r.updatedAt > t.updatedAt else { return false }
         t.title = r.title; t.estimateMin = r.estimateMin; t.estimateGuessed = r.estimateGuessed
         t.doneAt = r.doneAt; t.source = r.source; t.sort = r.sort
+        t.activeAt = r.activeAt; t.currentAt = r.currentAt; t.deletedAt = r.deletedAt
+        if r.projectID != t.project?.id, let ctx = t.modelContext, let p = project(r.projectID, ctx) { t.project = p }
         t.updatedAt = r.updatedAt; t.syncedAt = r.updatedAt
         return true
     }
@@ -131,6 +134,7 @@ public enum Mapping {
         guard let p = project(r.projectID, ctx) else { return nil }
         let t = TaskItem(title: r.title, estimateMin: r.estimateMin, estimateGuessed: r.estimateGuessed, source: r.source, sort: r.sort, now: r.updatedAt)
         t.id = r.id; t.doneAt = r.doneAt; t.syncedAt = r.updatedAt
+        t.activeAt = r.activeAt; t.currentAt = r.currentAt; t.deletedAt = r.deletedAt
         ctx.insert(t)
         t.project = p
         return t

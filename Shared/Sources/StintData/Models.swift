@@ -71,6 +71,12 @@ public extension Syncable {
     public var doneAt: Date?
     public var source: String
     public var sort: Int
+    /// Board state (spec 2026-11-27 §3): done if `doneAt`, else active if `activeAt`, else pending.
+    public var activeAt: Date? = nil
+    /// Latest tap; the newest one is the current card while its project is tracked.
+    public var currentAt: Date? = nil
+    /// Soft delete: remote deletes aren't pulled, so a delete syncs as an update.
+    public var deletedAt: Date? = nil
     public var project: Project?
 
     public init(title: String, estimateMin: Int? = nil, estimateGuessed: Bool = false, source: String = "manual", sort: Int = 0, now: Date = .now) {

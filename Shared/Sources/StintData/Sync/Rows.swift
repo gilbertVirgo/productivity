@@ -62,10 +62,14 @@ public struct TaskRow: Codable, Sendable, Equatable {
     public var doneAt: Date?
     public var source: String
     public var sort: Int
+    public var activeAt: Date? = nil
+    public var currentAt: Date? = nil
+    public var deletedAt: Date? = nil
     public var serverUpdatedAt: Date? = nil
     enum CodingKeys: String, CodingKey {
         case id, userID = "user_id", updatedAt = "updated_at", projectID = "project_id", title
         case estimateMin = "estimate_min", estimateGuessed = "estimate_guessed", doneAt = "done_at", source, sort
+        case activeAt = "active_at", currentAt = "current_at", deletedAt = "deleted_at"
         case serverUpdatedAt = "server_updated_at"
     }
     public func encode(to e: Encoder) throws {
@@ -74,6 +78,7 @@ public struct TaskRow: Codable, Sendable, Equatable {
         try c.encode(projectID, forKey: .projectID); try c.encode(title, forKey: .title)
         try c.encode(estimateMin, forKey: .estimateMin); try c.encode(estimateGuessed, forKey: .estimateGuessed)
         try c.encode(doneAt, forKey: .doneAt); try c.encode(source, forKey: .source); try c.encode(sort, forKey: .sort)
+        try c.encode(activeAt, forKey: .activeAt); try c.encode(currentAt, forKey: .currentAt); try c.encode(deletedAt, forKey: .deletedAt)
     }
 }
 
