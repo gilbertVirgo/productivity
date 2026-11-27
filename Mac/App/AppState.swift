@@ -9,14 +9,6 @@ struct Nudge: Equatable { var bundleID: String; var host: String?; var startedAt
 
 struct TodayStats: Equatable { var focusedSec: Int; var breakLeftSec: Int; var points: Int }
 
-extension Project {
-    /// Menu bar name: the short name, else the name cut to 12 characters.
-    var menuTitle: String {
-        if let s = shortName?.trimmingCharacters(in: .whitespaces), !s.isEmpty { return s }
-        return name.count > 12 ? String(name.prefix(11)) + "…" : name
-    }
-}
-
 struct SwitchUndo: Equatable { var fromID: UUID; var since: Date; var until: Date; var suggestion: SwitchSuggester.Suggestion }
 
 /// The Mac's tracking state (spec 2026-11-26 §5): one current project, switched from the menu bar, hotkey,
@@ -48,6 +40,8 @@ final class AppState {
     /// Sync hooks: fired after every checkpoint and after a stretch closes.
     @ObservationIgnored var onCheckpoint: (() -> Void)?
     @ObservationIgnored var onSessionClosed: (() -> Void)?
+    /// Board edits saved locally; wired to SyncCoordinator.syncSoon.
+    @ObservationIgnored var onTasksChanged: (() -> Void)?
     /// Live Activity hook: .start when tracking begins, .update when what the phone shows changes, .end on stop.
     @ObservationIgnored var onLive: ((LivePush) -> Void)?
     /// Stretches closed at launch after a quit or crash; their Live Activity still needs an .end once signed in.
@@ -126,6 +120,21 @@ final class AppState {
 
     func switchToPrevious() { if let p = previousProject { switchTo(p) } }
 
+    // MARK: board (spec 2026-11-27 §4, §6)
+
+    func board(now: Date = .now) -> Board {
+        Board.make(tasks: (try? ctx.fetch(FetchDescriptor<TaskItem>())) ?? [], trackedProjectID: tracker.currentID, now: now, calendar: calendar)
+    }
+
+    /// Tap flow: the card becomes current and tracking switches to its project.
+    func tap(_ t: TaskItem) {
+        Board.makeCurrent(t, now: .now)
+        tasksChanged()
+        if let p = t.project, tracker.currentID != p.id { switchTo(p) }
+    }
+
+    func tasksChanged() { ctx.saveLogged(); onTasksChanged?() }
+
     func stop() {
         guard isTracking else { return }
         apply(tracker.stop(at: .now))
@@ -198,8 +207,9 @@ final class AppState {
 
     private func liveState(at now: Date) -> LiveSessionState? {
         guard let e = tracker.engine, let p = project else { return nil }
+        // ponytail: fetches all tasks each tick; fine for a personal board, cache if it shows up in profiles.
         return .make(projectName: p.name, colorHex: p.colorHex, icon: p.icon, focusedSec: e.totals(at: now).focusedSec,
-                     onBreak: e.onBreak, offTask: e.isOffTask, paused: e.idle || e.asleep, now: now)
+                     onBreak: e.onBreak, offTask: e.isOffTask, paused: e.idle || e.asleep, now: now, taskTitle: board(now: now).current?.title)
     }
 
     private func pushLive() {

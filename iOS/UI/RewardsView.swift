@@ -3,7 +3,8 @@ import SwiftData
 import Core
 import StintData
 
-struct RewardsView: View {
+/// Rewards part of the Progress sheet: balance and treats to redeem.
+struct RewardsSections: View {
     @Environment(PhoneSync.self) private var sync
     @Environment(\.modelContext) private var ctx
     @Query private var events: [PointEvent]
@@ -13,9 +14,8 @@ struct RewardsView: View {
 
     var body: some View {
         let balance = events.reduce(0) { $0 + $1.delta }
-        NavigationStack {
-            List {
-                Section {
+        Group {
+                Section("Rewards") {
                     LabeledContent("Balance", value: "\(balance)")
                     LabeledContent("Today", value: "\(sync.snapshot?.pointsToday ?? 0)")
                 }
@@ -33,8 +33,6 @@ struct RewardsView: View {
                     }
                 }
             }
-            .navigationTitle("Rewards")
-            .refreshable { await sync.refresh() }
             .confirmationDialog("Redeem \(pending?.name ?? "")?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }),
                                 titleVisibility: .visible, presenting: pending) { t in
                 Button("Redeem for \(t.cost) points") {
@@ -45,6 +43,5 @@ struct RewardsView: View {
                     }
                 }
             }
-        }
     }
 }

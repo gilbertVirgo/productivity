@@ -12,7 +12,7 @@ struct IconPicker: View {
     let colorHex: String
 
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 6), count: 9), alignment: .leading, spacing: 6) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 34, maximum: 40), spacing: 6)], alignment: .leading, spacing: 6) {
             cell(nil)
             ForEach(ProjectSymbols.all, id: \.self) { cell($0) }
         }

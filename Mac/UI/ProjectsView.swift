@@ -28,10 +28,7 @@ struct ProjectsView: View {
     }
 
     private func create() {
-        let total = (try? ctx.fetchCount(FetchDescriptor<Project>())) ?? projects.count
-        let p = Project(name: "Untitled", shareAlias: "Project \(total + 1)",
-                        colorHex: ProjectColor.all[total % ProjectColor.all.count])
-        ctx.insert(p)
+        let p = Project.makeNew(in: ctx)
         ctx.saveLogged()
         selection = p.id
     }

@@ -19,6 +19,23 @@ enum Switcher {
         return projects.filter { $0.name.localizedCaseInsensitiveContains(q) || ($0.shortName ?? "").localizedCaseInsensitiveContains(q) }
     }
 
+    /// Active cards whose title or project matches.
+    static func filterCards(_ cards: [TaskItem], query: String) -> [TaskItem] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return cards }
+        return cards.filter { $0.title.localizedCaseInsensitiveContains(q) || ($0.project?.name ?? "").localizedCaseInsensitiveContains(q) }
+    }
+
+    /// Up to 9 rows: matching Active cards first, then matching projects (spec 2026-11-27 §6).
+    static func rows(cards: [TaskItem], projects: [Project], query: String) -> [Row] {
+        Array((filterCards(cards, query: query).map(Row.card) + filter(projects, query: query).map(Row.project)).prefix(9))
+    }
+
+    enum Row: Identifiable {
+        case card(TaskItem), project(Project)
+        var id: UUID { switch self { case .card(let t): t.id; case .project(let p): p.id } }
+    }
+
     /// A second press within 0.4 s of the first, while the panel is open, flips back to the previous project.
     static func pressAction(sinceLast: TimeInterval?, isOpen: Bool) -> Press {
         guard isOpen else { return .open }
@@ -57,7 +74,8 @@ final class SwitcherController {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.titleVisibility = .hidden; p.titlebarAppearsTransparent = true; p.isReleasedWhenClosed = false
         p.isMovableByWindowBackground = true
-        let host = NSHostingView(rootView: SwitcherView(projects: rows, close: { [weak self] in self?.hide() }).environment(app))
+        let host = NSHostingView(rootView: SwitcherView(projects: rows, cards: app.board().active, close: { [weak self] in self?.hide() })
+            .environment(app))
         p.contentView = host
         p.setContentSize(host.fittingSize)
         p.center()
@@ -78,12 +96,13 @@ final class SwitcherController {
 struct SwitcherView: View {
     @Environment(AppState.self) private var app
     let projects: [Project]
+    let cards: [TaskItem]
     let close: () -> Void
     @State private var query = ""
     @FocusState private var focused: Bool
 
     var body: some View {
-        let rows = Array(Switcher.filter(projects, query: query).prefix(9))
+        let rows = Switcher.rows(cards: cards, projects: projects, query: query)
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Image(systemName: "arrow.left.arrow.right").foregroundStyle(.secondary)
@@ -99,7 +118,7 @@ struct SwitcherView: View {
             }.padding(16)
             Divider()
             VStack(spacing: 2) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { i, p in row(i, p) }
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in row(i, r) }
             }.padding(8)
             Divider()
             HStack(spacing: 16) {
@@ -118,18 +137,28 @@ struct SwitcherView: View {
         .onAppear { DispatchQueue.main.async { focused = true } } // the non-activating panel isn't key yet
     }
 
-    private func row(_ i: Int, _ p: Project) -> some View {
+    private func row(_ i: Int, _ r: Switcher.Row) -> some View {
         let first = i == 0
-        let tag = p.id == app.tracker.currentID ? "current" : p.id == app.tracker.previousID ? "previous" : ""
-        return Button { pick(p) } label: {
+        return Button { pick(r) } label: {
             HStack(spacing: 14) {
                 Text("\(i + 1)").font(.callout.weight(.bold)).monospacedDigit().frame(width: 26, height: 26)
                     .overlay(RoundedRectangle(cornerRadius: 7).stroke(first ? .white.opacity(0.7) : .secondary, lineWidth: 1.5))
-                ProjectIcon(name: p.name, colorHex: p.colorHex, icon: p.icon, size: 34)
-                Text(p.name).font(.body.weight(.semibold))
-                Spacer()
-                Text(tag).font(.caption).opacity(0.85)
-                Text(hoursMinutes(app.focusedToday(p.id))).monospacedDigit()
+                switch r {
+                case .card(let t):
+                    ProjectIcon(name: t.project?.name ?? "?", colorHex: t.project?.colorHex ?? "#8E8E93", icon: t.project?.icon, size: 34)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(t.title).font(.body.weight(.semibold)).lineLimit(1)
+                        Text(t.project?.name ?? "").font(.caption).opacity(0.8)
+                    }
+                    Spacer()
+                    Text(t.id == app.board().current?.id ? "current card" : "card").font(.caption).opacity(0.85)
+                case .project(let p):
+                    ProjectIcon(name: p.name, colorHex: p.colorHex, icon: p.icon, size: 34)
+                    Text(p.name).font(.body.weight(.semibold))
+                    Spacer()
+                    Text(p.id == app.tracker.currentID ? "current" : p.id == app.tracker.previousID ? "previous" : "").font(.caption).opacity(0.85)
+                    Text(hoursMinutes(app.focusedToday(p.id))).monospacedDigit()
+                }
             }
             .padding(.horizontal, 12).frame(minHeight: 52)
             .foregroundStyle(first ? .white : .primary)
@@ -142,8 +171,12 @@ struct SwitcherView: View {
         HStack(spacing: 4) { Text(key).bold().foregroundStyle(.primary); Text(label) }
     }
 
-    private func pick(_ p: Project?) {
-        if let p { app.switchTo(p) }
+    private func pick(_ r: Switcher.Row?) {
+        switch r {
+        case .card(let t): app.tap(t)
+        case .project(let p): app.switchTo(p)
+        case nil: break
+        }
         close()
     }
 }

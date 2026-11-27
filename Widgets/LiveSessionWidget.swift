@@ -11,7 +11,9 @@ struct LiveSessionWidget: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) { Text(ctx.state.projectName).font(.headline).lineLimit(1) }
                 DynamicIslandExpandedRegion(.trailing) { Clock(state: ctx.state).font(.title3) }
-                DynamicIslandExpandedRegion(.bottom) { Status(state: ctx.state) }
+                DynamicIslandExpandedRegion(.bottom) {
+                    if let t = ctx.state.taskTitle { Text(t).font(.callout).lineLimit(1) } else { Status(state: ctx.state) }
+                }
             } compactLeading: {
                 Image(systemName: symbol(ctx.state.status)).foregroundStyle(statusTint(ctx.state.status))
             } compactTrailing: {
@@ -32,6 +34,7 @@ private struct LockScreen: View {
                     Image(systemName: state.icon ?? "circle.fill").foregroundStyle(Color(hex: state.colorHex))
                     Text(state.projectName).font(.headline).lineLimit(1)
                 }
+                if let t = state.taskTitle { Text(t).font(.subheadline).lineLimit(1) }
                 Status(state: state)
             }
             Spacer()

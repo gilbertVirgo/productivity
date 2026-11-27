@@ -40,6 +40,7 @@ final class SyncCoordinator {
         }
         app.onCheckpoint = { [weak self] in self?.syncSoon() }
         app.onSessionClosed = { [weak self] in self?.syncSoon() }
+        app.onTasksChanged = { [weak self] in self?.syncSoon() }
         app.onLive = { [weak self] in self?.sendLive($0) }
         Task { await resume() }
     }

@@ -71,7 +71,7 @@ final class LiveActivities {
 
     /// Makes the activities match the session feed: one for the running session, none otherwise.
     /// `force` also ends young activities (sign-out).
-    func reconcile(running: RunningSession?, project: Project?, now: Date, force: Bool = false) async {
+    func reconcile(running: RunningSession?, project: Project?, taskTitle: String? = nil, now: Date, force: Bool = false) async {
         let all = Activity<StintActivityAttributes>.activities.filter { $0.activityState == .active || $0.activityState == .stale }
         for a in all { firstSeen[a.id] = firstSeen[a.id] ?? now }
         // The Mac's `.end` push can end an activity behind our back: forget a kept one that's gone.
@@ -89,7 +89,8 @@ final class LiveActivities {
         guard let running else { return }
         let state = LiveSessionState.make(projectName: project?.name ?? "Stint", colorHex: project?.colorHex ?? "#8E8E93",
                                           icon: project?.icon, focusedSec: running.totals(at: now).focusedSec,
-                                          onBreak: running.onBreak, offTask: running.offTask, paused: running.paused, now: now)
+                                          onBreak: running.onBreak, offTask: running.offTask, paused: running.paused, now: now,
+                                          taskTitle: taskTitle)
         if plan.start {
             guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
             let attrs = StintActivityAttributes(sessionID: running.id.uuidString)

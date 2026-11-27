@@ -1,25 +1,18 @@
 import SwiftUI
 
-enum Tab: Hashable { case today, week, rewards }
-
+/// One main screen (spec 2026-11-27 §5): the board. Progress and Settings are sheets; Desk mode is a full-screen cover.
 struct RootView: View {
     @Environment(PhoneSync.self) private var sync
-    @State var tab: Tab = .today
     @State private var desk = false
     var body: some View {
         content.onOpenURL { url in
-            tab = .today
             if DeskLink.matches(url) { desk = true }
         }
     }
     @ViewBuilder private var content: some View {
         if case .signedIn = sync.state {
-            TabView(selection: $tab) {
-                TodayView().tabItem { Label("Today", systemImage: "sun.max") }.tag(Tab.today)
-                WeekView().tabItem { Label("Week", systemImage: "calendar") }.tag(Tab.week)
-                RewardsView().tabItem { Label("Rewards", systemImage: "gift") }.tag(Tab.rewards)
-            }
-            .fullScreenCover(isPresented: $desk) { DeskView() }
+            BoardView(desk: $desk)
+                .fullScreenCover(isPresented: $desk) { DeskView() }
         } else { SignInView() }
     }
 }

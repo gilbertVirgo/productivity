@@ -190,7 +190,8 @@ final class PhoneSync {
         if let pid = run?.projectID {
             project = (try? ctx.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == pid })))?.first
         }
-        await live.reconcile(running: run, project: project, now: .now)
+        let title = board((try? ctx.fetch(FetchDescriptor<TaskItem>())) ?? []).current?.title
+        await live.reconcile(running: run, project: project, taskTitle: title, now: .now)
     }
 
     func parseTasks(_ transcript: String, projects: [Project]) async throws -> [ParsedTask] {
@@ -293,5 +294,24 @@ final class PhoneSync {
         } catch {
             commandStatus = "Couldn't send to your Mac: \(error.localizedDescription)"
         }
+    }
+}
+
+// MARK: board (spec 2026-11-27 §4)
+
+extension PhoneSync {
+    /// Saves local board/project edits and pushes them soon.
+    func boardChanged() { ctx.saveLogged(); syncSoon() }
+
+    func board(_ tasks: [TaskItem], now: Date = .now) -> Board {
+        Board.make(tasks: tasks, trackedProjectID: running?.projectID, now: now, calendar: cal)
+    }
+
+    /// Tap flow: the card becomes current; if tracking isn't on its project, ask the Mac to switch.
+    func tap(_ t: TaskItem) {
+        Board.makeCurrent(t, now: .now)
+        boardChanged()
+        guard let pid = t.project?.id, running?.projectID != pid else { return }
+        Task { await send(.switchTo(projectID: pid)) }
     }
 }

@@ -2,23 +2,19 @@ import SwiftUI
 import SwiftData
 import StintData
 
-struct WeekView: View {
-    @Environment(PhoneSync.self) private var sync
+/// Goal history part of the Progress sheet, newest week first.
+struct GoalHistorySections: View {
     @Query(sort: \GoalResultRecord.periodStart, order: .reverse) private var results: [GoalResultRecord]
     @Query private var allProjects: [Project]
 
     var body: some View {
-        NavigationStack {
-            List {
+        Group {
                 if results.isEmpty { Text("Goal results appear after each day and week closes.").foregroundStyle(.secondary) }
                 ForEach(goalHistory(results)) { w in
                     Section("Week of \(w.weekStart.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, timeZone: .gmt)))") {
                         ForEach(w.results) { r in GoalLine(result: r, name: allProjects.first { $0.id == r.projectID }?.name ?? "Project") }
                     }
                 }
-            }
-            .navigationTitle("Week")
-            .refreshable { await sync.refresh() }
         }
     }
 }

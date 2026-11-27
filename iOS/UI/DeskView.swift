@@ -10,23 +10,22 @@ struct DeskView: View {
     @Environment(PhoneSync.self) private var sync
     @Environment(\.dismiss) private var dismiss
     @Query(filter: #Predicate<Project> { $0.archivedAt == nil }, sort: \Project.name) private var projects: [Project]
+    @Query private var tasks: [TaskItem]
     @State private var sending: String?
     @State private var shake: String?
 
     var body: some View {
         let running = sync.running
         let lines = sync.snapshot?.lines ?? []
+        let board = sync.board(tasks)
         GeometryReader { geo in
             let columns = geo.size.width > geo.size.height ? 3 : 2
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     header(running, projects: projects, lines: lines)
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 12) {
-                        ForEach(projects) { p in
-                            tile(key: p.id.uuidString, on: running?.projectID == p.id, color: Color(hex: p.colorHex),
-                                 title: p.name, sub: "\(hoursMinutes(lines.first { $0.id == p.id }?.todayFocusedSec ?? 0)) today") {
-                                ProjectIcon(name: p.name, colorHex: p.colorHex, icon: p.icon, size: 52)
-                            } action: { .switchTo(projectID: p.id) }
+                        ForEach(board.active) { t in
+                            card(t, on: t.id == board.current?.id)
                         }
                         tile(key: "break", on: running?.onBreak == true, color: .gray,
                              title: running?.onBreak == true ? "On break" : "Break", sub: "Pause the current project") {
@@ -37,6 +36,9 @@ struct DeskView: View {
                              title: running == nil ? "Stopped" : "Stop", sub: running == nil ? "Tap a project to start" : "Done for now") {
                             symbol("stop.fill")
                         } action: { .stop }
+                    }
+                    if board.active.isEmpty {
+                        Text("Active cards show here. Tap a card on the board to make it active.").font(.footnote).foregroundStyle(.secondary)
                     }
                     if let s = sync.commandStatus, sending == nil { Text(s).font(.footnote).foregroundStyle(.secondary) }
                 }
@@ -52,23 +54,53 @@ struct DeskView: View {
 
     private func header(_ running: RunningSession?, projects: [Project], lines: [WidgetSnapshot.Line]) -> some View {
         let p = projects.first { $0.id == running?.projectID }
-        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+        let now = HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(running == nil ? "NOT TRACKING" : running!.onBreak ? "PAUSED" : "WORKING ON")
-                .font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
-            Text(p?.name ?? "Nothing").font(.title2.bold())
+                .font(.footnote.weight(.semibold)).foregroundStyle(.secondary).fixedSize()
+            Text(p?.name ?? "Nothing").font(.title2.bold()).lineLimit(1)
             if let running {
                 TimelineView(.periodic(from: .now, by: 1)) { tl in
                     Text(remainingText(running.totals(at: tl.date).focusedSec)).font(.title2.bold().monospacedDigit())
                         .foregroundStyle(Color(hex: p?.colorHex ?? "#A1A1AA"))
-                }
+                }.fixedSize()
             }
-            Spacer()
+        }
+        let status = HStack(spacing: 12) {
             Text("Today \(hoursMinutes(sync.snapshot?.todayFocusedSec ?? 0)) · \(sync.snapshot?.pointsToday ?? 0) pts")
-                .font(.footnote).foregroundStyle(.secondary)
             Label(running.map { $0.isStale(at: .now) } == true ? "Mac quiet" : "Mac connected", systemImage: "circle.fill")
-                .labelStyle(.titleAndIcon).font(.footnote).foregroundStyle(.secondary)
+                .labelStyle(.titleAndIcon)
+        }
+        .font(.footnote).foregroundStyle(.secondary).fixedSize()
+        // Landscape: one row. Portrait: two.
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) { now.fixedSize(); Spacer(); status }
+            VStack(alignment: .leading, spacing: 6) { now; status }
         }
         .padding(.trailing, 60) // clear of Done
+    }
+
+    /// An Active card: tap runs the board's tap flow (current card, switch if needed).
+    private func card(_ t: TaskItem, on: Bool) -> some View {
+        let color = Color(hex: t.project?.colorHex ?? "#8E8E93")
+        return Button { sync.tap(t) } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(t.title).font(.headline).lineLimit(2).multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 0)
+                HStack {
+                    ProjectChip(project: t.project, size: 24)
+                    Spacer()
+                    if on { Text("Now").font(.subheadline.weight(.semibold)) }
+                }
+            }
+            .padding(16).frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+            .background(on ? color.opacity(0.35) : Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 22))
+            .overlay(RoundedRectangle(cornerRadius: 22).stroke(on ? color : .clear, lineWidth: 2))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(sync.waiting)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private func symbol(_ name: String) -> some View {

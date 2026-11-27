@@ -2,19 +2,6 @@ import Foundation
 import Core
 import StintData
 
-private func byOrder(_ a: TaskItem, _ b: TaskItem) -> Bool { (a.sort, a.createdAt) < (b.sort, b.createdAt) }
-
-/// Today's "Up next": open tasks of live projects.
-func upNext(_ tasks: [TaskItem], limit: Int) -> [TaskItem] {
-    Array(tasks.filter { $0.doneAt == nil && $0.project != nil && $0.project?.archivedAt == nil }.sorted(by: byOrder).prefix(limit))
-}
-
-/// Tasks tab: open tasks plus those finished today (so a mis-tap can be undone).
-func visibleTasks(_ tasks: [TaskItem], now: Date, calendar: PeriodCalendar) -> [TaskItem] {
-    let today = calendar.dayInterval(containing: now)
-    return tasks.filter { t in t.doneAt.map { $0 >= today.start && $0 < today.end } ?? true }.sorted(by: byOrder)
-}
-
 struct WeekGoals: Identifiable {
     var weekStart: Date
     var results: [GoalResultRecord]
