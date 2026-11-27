@@ -103,7 +103,7 @@ targets:
         NSSpeechRecognitionUsageDescription: "Stint turns your dictation into text on this device, then into a task list."
         UILaunchScreen: {}
         NSSupportsLiveActivities: true
-        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         StintSupabaseURL: $(STINT_SUPABASE_URL)
         StintSupabaseAnonKey: $(STINT_SUPABASE_ANON_KEY)
         NSAppTransportSecurity:
